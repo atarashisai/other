@@ -33,6 +33,7 @@ void Barrel::doSomething() {
 		setVisible(true);
 	}
 	if (std::abs((this->x() + 1 - player->x())) < 3 && std::abs((this->y() + 1 - player->y())) < 3) {
+		player->getBarrel();
 		world->increaseScore(1000);
 		kill();
 	}
@@ -41,12 +42,13 @@ void Boulder::doSomething() {
 
 }
 void Boulder::removeIce() {
+	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
 		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			Actor* tile = static_cast<StudentWorld*>(this->_gw)
+			Actor* tile = world
 				->getTile(this->_x + deltaX, this->_y + deltaY);
 			if (tile != nullptr) {
-				tile->kill();
+				world->removeIce(dynamic_cast<Ice*>(tile));
 			}
 		}
 	}
@@ -149,24 +151,25 @@ int Iceman::health() {
 	return this->hit_point;
 }
 void Iceman::getGold() {
-	number_gold += 1;
+	this->number_gold += 1;
 }
 void Iceman::getSonar() {
-	number_sonar += 1;
+	this->number_sonar += 1;
 }
 void Iceman::getSquirt() {
-	number_squirt += 5;
+	this->number_squirt += 5;
 }
 void Iceman::getBarrel() {
-	number_barrel += 1;
+	this->number_barrel += 1;
 }
 void Iceman::removeTile() const {
+	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
 		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			Actor* tile = static_cast<StudentWorld*>(this->_gw)
+			Actor* tile = world
 				->getTile(this->_x + deltaX, this->_y + deltaY);
 			if (tile != nullptr) {
-				tile->kill();
+				world->removeIce(dynamic_cast<Ice*>(tile));
 			}
 		}
 	}

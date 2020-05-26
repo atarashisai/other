@@ -15,8 +15,16 @@ protected:
 	int _y;
 	bool _alive;
 public:
-	Actor(GameWorld* gw, int imageID, bool visible, int startX, int startY, Direction dir = right, double size = 1.0, unsigned int depth = 0)
-		: GraphObject(imageID, startX, startY, dir, size, depth) {
+	Actor(
+		GameWorld* gw, 
+		int imageID, 
+		bool visible, 
+		int startX, 
+		int startY, 
+		Direction dir = right, 
+		double size = 1.0, 
+		unsigned int depth = 2
+	): GraphObject(imageID, startX, startY, dir, size, depth) {
 		this->_x = startX;
 		this->_y = startY;
 		this->_gw = gw;
@@ -30,6 +38,7 @@ public:
 		this->_alive = false;
 		this->setVisible(false);
 	}
+	bool isAlive() { return this->_alive; }
 	int x() { return _x; };
 	int y() { return _y; };
 };
@@ -61,7 +70,7 @@ private:
 	int countdown;
 public:
 	Sonar(GameWorld* gw, int x, int y) :
-		Goody(gw, IID_SONAR, true, x, y, right, 1, 2), 
+		Goody(gw, IID_SONAR, true, x, y), 
 		countdown(std::max(100, 300 - 10 * (int)gw->getLevel())) {}
 	void doSomething();
 	~Sonar() {}
@@ -72,7 +81,7 @@ private:
 	int countdown;
 public:
 	Water(GameWorld* gw, int x, int y) :
-		Goody(gw, IID_WATER_POOL, true, x, y, right, 1, 2) {}
+		Goody(gw, IID_WATER_POOL, true, x, y) {}
 	void doSomething();
 	~Water() {}
 };
@@ -83,7 +92,7 @@ private:
 	bool isPermanent = true;
 public:
 	Gold(GameWorld* gw, int x, int y) :
-		Goody(gw, IID_GOLD, false, x, y, right, 1, 2) {}
+		Goody(gw, IID_GOLD, false, x, y) {}
 	void doSomething();
 	~Gold() {}
 };
@@ -93,7 +102,7 @@ private:
 	int countdown;
 public:
 	Barrel(GameWorld* gw, int x, int y):
-		Goody(gw, IID_BARREL, false, x, y, right, 1, 2) {}
+		Goody(gw, IID_BARREL, false, x, y) {}
 	void doSomething();
 	~Barrel() {}
 };
