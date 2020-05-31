@@ -11,8 +11,13 @@ StudentWorld::StudentWorld(std::string assetDir)
 {
 	t += 1;
 }
-Actor* StudentWorld::getTile(int x, int y) {
-	return map[x][y];
+
+// Get a tile from a specific location.
+Actor* StudentWorld::at(int x, int y) {
+	if (x < 0 || y < 0 || x >= VIEW_WIDTH || y >= VIEW_WIDTH)
+		return nullptr;
+	else
+		return map[x][y];
 }
 void StudentWorld::removeIce(Ice* ice) {
 	map[ice->x()][ice->y()] = nullptr;
@@ -24,6 +29,7 @@ Actor* StudentWorld::getPlayer() {
 int StudentWorld::init()
 {
 	Actor* tile;
+	/*clean up map array*/memset(map, 0, sizeof(map));
 
 	int current_level_number = getLevel();
 
@@ -35,13 +41,28 @@ int StudentWorld::init()
 
 	/* There is a 1 in G chance that a new Water Pool or Sonar Kit Goodie will be added */
 	this->G_chance = current_level_number * 25 + 300;
+	/* Boulder */
+	for (int n = 0; n < B; n++) {
+		int x = rand(0, VIEW_HEIGHT - SPRITE_HEIGHT);
+		int y = rand(20, 56);
+		tile = new Boulder(this, x, y);
+		allItems.push_back(tile);
+		allActors.push_back(tile);
+
+		/* A boulder should occupy the 4x4 space */
+		for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+			for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
+				map[x+dx][y+dy] = tile;
+			}
+		}
+	}
 	/* Ice */
-
-	/*clean up map array*/memset(map, 0, sizeof(map));
-
 	for (int x = 0; x < 64; x++) {
 		for (int y = 0; y < 60; y++) {
-			if (x >= 30 && x <= 33) {
+			if (map[x][y] != nullptr) {
+				continue;
+			}
+			if ((x >= 30 && x <= 33 && y >= 4)) {
 				continue;
 			}
 			else {
@@ -49,12 +70,6 @@ int StudentWorld::init()
 				allActors.push_back(map[x][y]);
 			}
 		}
-	}
-	/* Boulder */
-	for (int n = 0; n < B; n++) {
-		tile = new Boulder(this, rand(0, VIEW_HEIGHT - SPRITE_HEIGHT), rand(20, 56));
-		allItems.push_back(tile);
-		allActors.push_back(tile);
 	}
 	/* Gold */
 	for (int n = 0; n < G; n++) {
@@ -96,7 +111,6 @@ void StudentWorld::addNewItem() {
 }
 int StudentWorld::move()
 {
-
 	// This code is here merely to allow the game to build, run, and terminate after you hit enter a few times.
 	// Notice that the return value GWSTATUS_PLAYER_DIED will cause our framework to end the current level.
 	//decLives();
@@ -105,7 +119,7 @@ int StudentWorld::move()
 	}
 	if (player->health() == 0) {
 		decLives();
-		return GWSTATUS_CONTINUE_GAME;
+		return GWSTATUS_PLAYER_DIED;
 	}
 	for (auto actor : allActors) {
 		actor->doSomething();

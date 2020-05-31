@@ -39,8 +39,8 @@ public:
 		this->setVisible(false);
 	}
 	bool isAlive() { return this->_alive; }
-	int x() { return _x; };
-	int y() { return _y; };
+	int x() { return this->_x; };
+	int y() { return this->_y; };
 };
 class Ice : public Actor {
 public:
@@ -53,7 +53,6 @@ class Boulder : public Actor {
 public:
 	Boulder(GameWorld* gw, int x, int y): 
 		Actor(gw, IID_BOULDER, true, x, y, down, 1, 1) {
-		removeIce();
 	};
 	virtual void doSomething();
 	void removeIce();
@@ -128,22 +127,29 @@ public:
 	int squirt();
 	int health();
 	int barrel();
-	void getGold();
-	void getSonar();
-	void getSquirt();
-	void getBarrel();
+	void addGold();
+	void addSonar();
+	void addSquirt();
+	void addBarrel();
 	void removeTile() const;
+	bool passable(int x, int y);
 };
 
 class Protester : public Actor {
 private:
+	int ticksToWaitBetweenMoves;
+	int step;
 	/* */
 public:
 	/* */
-	Protester(GameWorld* gw, int x, int y, const int IID= IID_GOLD) :
-		Actor(gw, IID, true, x, y) {}
+	Protester(GameWorld* gw, int x, int y, const int IID= IID_PROTESTER) :
+		Actor(gw, IID, true, x, y) {
+		this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
+		this->step = 10;
+	}
 	~Protester() {}
 	void doSomething();
+	bool passable(int x, int y);
 };
 class HardcoreProtester : public Protester {
 private:
@@ -151,7 +157,7 @@ private:
 public:
 	/* */
 	HardcoreProtester(GameWorld* gw, int x, int y) :
-		Protester(gw, x, y, IID_GOLD) {}
+		Protester(gw, x, y, IID_HARD_CORE_PROTESTER) {}
 	~HardcoreProtester() {}
 	void doSomething();
 };

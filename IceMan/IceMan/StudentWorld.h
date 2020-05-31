@@ -24,13 +24,13 @@ private:
 	int number_barrel = 0;
 	std::mt19937 mt{ std::random_device{}() };
 	int t = 0;
+	Actor* map[VIEW_WIDTH][VIEW_HEIGHT];
+public:
 	int rand(int min, int max) {
 		return std::uniform_int_distribution<int>{min, max}(mt);
 	}
-	Actor* map[VIEW_WIDTH][VIEW_HEIGHT];
-public:
 	StudentWorld(std::string assetDir);
-	Actor* getTile(int x, int y);
+	Actor* at(int x, int y);
 	void removeIce(Ice* ice);
 	Actor* getPlayer();
 	virtual int init();

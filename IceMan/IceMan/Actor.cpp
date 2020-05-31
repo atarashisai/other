@@ -14,7 +14,7 @@ void Gold::doSomething() {
 			setVisible(true);
 		}
 		if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
-			player->getGold();
+			player->addGold();
 			world->increaseScore(10);
 			kill();
 		}
@@ -26,8 +26,8 @@ void Gold::doSomething() {
 			this->_alive = false;
 		}
 	}
-
 }
+
 void Barrel::doSomething() {
 	if (!_alive) return;
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
@@ -36,27 +36,15 @@ void Barrel::doSomething() {
 		setVisible(true);
 	}
 	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
-		player->getBarrel();
+		player->addBarrel();
 		world->increaseScore(1000);
 		kill();
 	}
 }
+
 void Boulder::doSomething() {
 
 }
-void Boulder::removeIce() {
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
-		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			Actor* tile = world
-				->getTile(this->_x + deltaX, this->_y + deltaY);
-			if (tile != nullptr) {
-				world->removeIce(dynamic_cast<Ice*>(tile));
-			}
-		}
-	}
-}
-
 
 void Sonar::doSomething() {
 	if (!_alive) return;
@@ -67,8 +55,8 @@ void Sonar::doSomething() {
 	}
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (std::abs((this->x() + 1 - player->x())) < 3 && std::abs((this->y() + 1 - player->y())) < 3) {
-		player->getSonar();
+	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+		player->addSonar();
 		world->increaseScore(75);
 		kill();
 	}
@@ -83,8 +71,8 @@ void Water::doSomething() {
 	}
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (std::abs((this->x() + 1 - player->x())) < 3 && std::abs((this->y() + 1 - player->y())) < 3) {
-		player->getSquirt();
+	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+		player->addSquirt();
 		world->increaseScore(100);
 		kill();
 	}
@@ -100,36 +88,44 @@ void Iceman::doSomething() {
 		case KEY_PRESS_LEFT:
 			/*... move player to the left ...;*/
 			setDirection(left);
-			if (this->_x > 0) {
+			if (this->passable(this->_x-1, this->_y)) {
 				this->_x -= 1;
 				removeTile();
+				moveTo(this->_x, this->_y);
 			}
-			moveTo(this->_x, this->_y);
 			break;
 		case KEY_PRESS_RIGHT:
 			/*... move player to the right ...; */
 			setDirection(right);
-			if (this->_x < VIEW_WIDTH - SPRITE_WIDTH) {
+			if (this->passable(this->_x + 1, this->_y)) {
 				this->_x += 1;
 				removeTile();
+				moveTo(this->_x, this->_y);
 			}
-			moveTo(this->_x, this->_y);
 			break;
 		case KEY_PRESS_DOWN:
 			setDirection(down);
-			if (this->_y > 0) {
+			if (this->passable(this->_x, this->_y - 1)) {
 				this->_y -= 1;
 				removeTile();
+				moveTo(this->_x, this->_y);
 			}
-			moveTo(this->_x, this->_y);
 			break;
 		case KEY_PRESS_UP:
 			setDirection(up);
-			if (this->_y < VIEW_HEIGHT - SPRITE_HEIGHT) {
+			if (this->passable(this->_x, this->_y + 1)) {
 				this->_y += 1;
 				removeTile();
+				moveTo(this->_x, this->_y);
 			}
-			moveTo(this->_x, this->_y);
+			break;
+		case 'z':
+		case 'Z':
+			if (this->sonar() > 0) {
+				this->number_sonar -= 1;
+			}
+		case KEY_PRESS_ESCAPE:
+			this->hit_point = 0;
 			break;
 		case KEY_PRESS_SPACE:
 			/*... add a Squirt in front of the player...; */
@@ -137,6 +133,19 @@ void Iceman::doSomething() {
 			// etc…
 		}
 	}
+}
+bool Iceman::passable(int x, int y) {
+	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
+		return false;
+	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+	for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+		for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
+			if (dynamic_cast<Boulder*>(world->at(x + dx, y + dy)) != nullptr) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 int Iceman::gold() {
 	return this->number_gold;
@@ -153,35 +162,116 @@ int Iceman::barrel() {
 int Iceman::health() {
 	return this->hit_point;
 }
-void Iceman::getGold() {
+void Iceman::addGold() {
 	this->number_gold += 1;
 }
-void Iceman::getSonar() {
+void Iceman::addSonar() {
 	this->number_sonar += 1;
 }
-void Iceman::getSquirt() {
+void Iceman::addSquirt() {
 	this->number_squirt += 5;
 }
-void Iceman::getBarrel() {
+void Iceman::addBarrel() {
 	this->number_barrel += 1;
 }
 void Iceman::removeTile() const {
+
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
 		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			Actor* tile = world
-				->getTile(this->_x + deltaX, this->_y + deltaY);
+			Ice* tile = dynamic_cast<Ice*>(world->at(this->_x + deltaX, this->_y + deltaY));
 			if (tile != nullptr) {
-				world->removeIce(dynamic_cast<Ice*>(tile));
+				world->removeIce(tile);
 			}
 		}
 	}
 }
 void Protester::doSomething() {
+	if (!this->_alive)
+		return;
+	if (this->ticksToWaitBetweenMoves == 0) {
+		if (this->step > 0)
+			this->step -= 1;
+		this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
 
+		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+		std::set<Direction> possible_move;
+		if (this->passable(this->_x + 1, this->_y))
+			possible_move.emplace(right);
+		if (this->passable(this->_x - 1, this->_y))
+			possible_move.emplace(left);
+		if (this->passable(this->_x, this->_y + 1))
+			possible_move.emplace(up);
+		if (this->passable(this->_x, this->_y - 1))
+			possible_move.emplace(down);
+
+
+		Direction dir = getDirection();
+		bool can_move_forward = std::find(possible_move.begin(), possible_move.end(), dir) != possible_move.end();
+		if (!can_move_forward) {
+			std::set<Direction>::iterator it = possible_move.begin();
+			for (int i = world->rand(0, possible_move.size() - 1); i > 0; i--) {
+				it++;
+			}
+			dir = *(it);
+		}
+		else if (possible_move.size() > 2) {
+			if (world->rand(0, 100) > 30 && this->step == 0) {
+				possible_move.erase(dir);
+				std::set<Direction>::iterator it = possible_move.begin();
+				for (int i = world->rand(0, possible_move.size() - 1);i > 0;i--) {
+					it++;
+				}
+				dir = *(it);
+				this->step = 5 + world->rand(0, 20);
+			}
+		}
+
+		switch (dir)
+		{
+		case right:
+			setDirection(right);
+			this->_x += 1;
+			moveTo(this->_x, this->_y);
+			break;
+		case left:
+			setDirection(left);
+			this->_x -= 1;
+			moveTo(this->_x, this->_y);
+			break;
+		case up:
+			setDirection(up);
+			this->_y += 1;
+			moveTo(this->_x, this->_y);
+			break;
+		case down:
+			setDirection(down);
+			this->_y -= 1;
+			moveTo(this->_x, this->_y);
+			break;
+		default:
+			break;
+		}
+	}
+	else {
+		this->ticksToWaitBetweenMoves -= 1;
+	}
+}
+bool Protester::passable(int x, int y) {
+	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
+		return false;
+	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+	for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+		for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
+			if (world->at(x + dx, y + dy) != nullptr) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 void HardcoreProtester::doSomething() {
-
+	Protester::doSomething();
 }
 struct AStarNode {
 	int y;
