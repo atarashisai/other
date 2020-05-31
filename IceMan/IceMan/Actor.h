@@ -92,7 +92,7 @@ private:
 	bool isPermanent = true;
 public:
 	Gold(GameWorld* gw, int x, int y) :
-		Goody(gw, IID_GOLD, false, x, y) {}
+		Goody(gw, IID_GOLD, true, x, y) {}
 	void doSomething();
 	~Gold() {}
 };
@@ -102,7 +102,7 @@ private:
 	int countdown;
 public:
 	Barrel(GameWorld* gw, int x, int y):
-		Goody(gw, IID_BARREL, false, x, y) {}
+		Goody(gw, IID_BARREL, true, x, y) {}
 	void doSomething();
 	~Barrel() {}
 };
@@ -140,15 +140,19 @@ private:
 	/* */
 public:
 	/* */
-	Protester();
-	~Protester();
+	Protester(GameWorld* gw, int x, int y, const int IID= IID_GOLD) :
+		Actor(gw, IID, true, x, y) {}
+	~Protester() {}
+	void doSomething();
 };
 class HardcoreProtester : public Protester {
 private:
 	/* */
 public:
 	/* */
-	HardcoreProtester();
-	~HardcoreProtester();
+	HardcoreProtester(GameWorld* gw, int x, int y) :
+		Protester(gw, x, y, IID_GOLD) {}
+	~HardcoreProtester() {}
+	void doSomething();
 };
 #endif // ACTOR_H_

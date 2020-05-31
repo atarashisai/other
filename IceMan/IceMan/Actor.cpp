@@ -1,16 +1,19 @@
 #include "Actor.h"
 #include "StudentWorld.h"
 #include <assert.h>
+#include <utility>
+#include <set>
+#include <stack>
 // Students:  Add code to this file (if you wish), Actor.h, StudentWorld.h, and StudentWorld.cpp
 void Gold::doSomething() {
 	if (!_alive) return;
 	if (isPermanent) {
 		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 		Iceman* player = static_cast<Iceman*>(world->getPlayer());
-		if (std::abs((this->x() + 1 - player->x())) < 4 && std::abs((this->y() + 1 - player->y())) < 4) {
+		if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 16) {
 			setVisible(true);
 		}
-		if (std::abs((this->x() + 1 - player->x())) < 3 && std::abs((this->y() + 1 - player->y())) < 3) {
+		if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
 			player->getGold();
 			world->increaseScore(10);
 			kill();
@@ -29,10 +32,10 @@ void Barrel::doSomething() {
 	if (!_alive) return;
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (std::abs((this->x() + 1 - player->x())) < 4 && std::abs((this->y() + 1 - player->y())) < 4) {
+	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 16) {
 		setVisible(true);
 	}
-	if (std::abs((this->x() + 1 - player->x())) < 3 && std::abs((this->y() + 1 - player->y())) < 3) {
+	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
 		player->getBarrel();
 		world->increaseScore(1000);
 		kill();
@@ -173,4 +176,188 @@ void Iceman::removeTile() const {
 			}
 		}
 	}
+}
+void Protester::doSomething() {
+
+}
+void HardcoreProtester::doSomething() {
+
+}
+struct AStarNode {
+	int y;
+	int x;
+	int parentX;
+	int parentY;
+	double g;
+	double h;
+	double f;
+};
+inline bool operator < (const AStarNode& lhs, const AStarNode& rhs)
+{//We need to overload "<" to put our struct into a set
+	if (lhs.y < rhs.y)
+		return true;
+	else if (lhs.y > rhs.y)
+		return false;
+	else
+		return lhs.x < rhs.x;
+}
+template <int ROW, int COL>
+class AStar {
+private:
+	bool closedList[ROW][COL];
+	AStarNode map[ROW][COL];
+public:
+	AStar() {
+		for (int x = 0; x < ROW; x++) {
+			for (int y = 0; y < COL; y++) {
+				closedList[x][y] = false;
+				map[x][y].f = FLT_MAX;
+				map[x][y].g = FLT_MAX;
+				map[x][y].h = FLT_MAX;
+				map[x][y].parentX = -1;
+				map[x][y].parentY = -1;
+				map[x][y].x = x;
+				map[x][y].y = y;
+			}
+		}
+	}
+	double calculateH(int x, int y, int tx, int ty) {
+		double H = (sqrt((x - tx) * (x - tx)
+			+ (y - ty) * (y - ty)));
+		return H;
+	}
+	std::vector<AStarNode> makePath(std::pair<int, int> dest) {
+		int grid[ROW][COL] =
+		{
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+		};
+		try {
+			cout << "Found a path" << endl;
+			int x = dest.first;
+			int y = dest.second;
+			std::stack<AStarNode> path;
+			std::vector<AStarNode> usablePath;
+
+			while (!(map[x][y].parentX == x && map[x][y].parentY == y)
+				&& map[x][y].x != -1 && map[x][y].y != -1)
+			{
+				path.push(map[x][y]);
+				int tempX = map[x][y].parentX;
+				int tempY = map[x][y].parentY;
+				x = tempX;
+				y = tempY;
+
+			}
+			path.push(map[x][y]);
+
+			while (!path.empty()) {
+				AStarNode top = path.top();
+				path.pop();
+				//cout << top.x << " " << top.y << endl;
+				grid[top.x][top.y] = 1;
+				usablePath.emplace_back(top);
+			}
+			for (int x = 0; x < ROW; x++) {
+				for (int y = 0; y < COL; y++) {
+					std::cout << grid[x][y] << " ";
+				}
+				std::cout << std::endl;
+			}
+			return usablePath;
+		}
+		catch (const exception & e) {
+			std::cout << e.what() << std::endl;
+		}
+	}
+	std::vector<AStarNode> search(std::pair<int, int> alpha, std::pair<int, int> omega, int grid[ROW][COL]) {
+		int x0 = alpha.first;  //original x value
+		int y0 = alpha.second; //original y value
+		int tx = omega.first;
+		int ty = omega.second;
+		map[x0][y0].f = 0.0;
+		map[x0][y0].g = 0.0;
+		map[x0][y0].h = 0.0;
+		map[x0][y0].parentX = x0;
+		map[x0][y0].parentY = y0;
+		set<AStarNode> openList;
+		openList.emplace(map[x0][y0]);
+		while (!openList.empty()) {
+			AStarNode node;
+			double temp = FLT_MAX;
+			std::set<AStarNode>::iterator itNode = openList.end();
+			for (std::set<AStarNode>::iterator it = openList.begin();
+				it != openList.end(); it = next(it)) {
+				AStarNode n = *it;
+				if (n.f < temp) {
+					temp = n.f;
+					itNode = it;
+				}
+			}
+			node = *itNode;
+			cout << "p" << (*itNode).x << " " << (*itNode).y << " f " << (*itNode).f << endl;
+			openList.erase(node);
+
+			x0 = node.x;
+			y0 = node.y;
+			closedList[x0][y0] = true;
+			for (int dx = -1; dx <= 1; dx++) {
+				for (int dy = -1; dy <= 1; dy++) {
+					if ((dx == 1 && dy == 1) || (dx == 1 && dy == -1) || (dx == -1 && dy == 1) || (dx == -1 && dy == -1)) {
+						continue;
+					}
+					if (x0 + dx < 0 || y0 + dy < 0 || x0 + dx >= COL || y0 + dy >= ROW) {
+						continue;
+					}
+					if (x0 + dx == tx && y0 + dy == ty) {
+						map[x0 + dx][y0 + dy].parentX = x0;
+						map[x0 + dx][y0 + dy].parentY = y0;
+						return makePath(omega);
+					}
+					if (closedList[x0 + dx][y0 + dy] == false) {
+						double g = FLT_MAX;
+						double h = FLT_MAX;
+						double f = FLT_MAX;
+						if (grid[x0 + dx][y0 + dy] == 1) {
+							g = node.g + 1.0;
+							h = calculateH(x0 + dx, y0 + dy, tx, ty);
+							f = g + h;
+						}
+						if (map[x0 + dx][y0 + dy].f == FLT_MAX ||
+							map[x0 + dx][y0 + dy].f > f) {
+							cout << "__" << x0 + dx << " " << y0 + dy << " f" << f << endl;
+							map[x0 + dx][y0 + dy].f = f;
+							map[x0 + dx][y0 + dy].g = g;
+							map[x0 + dx][y0 + dy].h = h;
+							map[x0 + dx][y0 + dy].parentX = x0;
+							map[x0 + dx][y0 + dy].parentY = y0;
+							openList.emplace(map[x0 + dx][y0 + dy]);
+							for (set<AStarNode>::iterator it = openList.begin();
+								it != openList.end(); it = next(it)) {
+								AStarNode n = *it;
+								cout << ":" << (*it).x << " " << (*it).y << " f " << (*it).f << endl;
+								if (n.f < temp) {
+									temp = n.f;
+									itNode = it;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return makePath(omega);
+	}
+};
+
+template <int ROW, int COL>
+void aStarSearch(int grid[ROW][COL], std::pair<int, int> src, std::pair<int, int> dest) {
+	auto a = AStar<ROW, COL>();
+	a.search(src, dest, grid);
 }

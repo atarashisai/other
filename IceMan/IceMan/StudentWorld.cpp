@@ -71,9 +71,15 @@ int StudentWorld::init()
 	/* Water */
 	tile = new Water(this, rand(0, 60), rand(20, 56));
 	allActors.push_back(tile);
+
 	/* Iceman */
 	player = new Iceman(this);
 	allActors.push_back(player);
+
+	/* Protesters */
+
+	allActors.push_back(new Protester(this, 60, 60));
+	allActors.push_back(new HardcoreProtester(this, 60, 60));
 	return GWSTATUS_CONTINUE_GAME;
 }
 void StudentWorld::addNewItem() {
