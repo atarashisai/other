@@ -45,6 +45,7 @@ public:
 	int getNumberOfBarrelsRemainingToBePickedUp();
 	std::string format();
 	void updateDisplayText();
+	void dropSquirt();
 };
 
 #endif // STUDENTWORLD_H_

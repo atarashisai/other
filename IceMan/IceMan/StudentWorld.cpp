@@ -37,6 +37,8 @@ int StudentWorld::init()
 	int B = std::min(current_level_number / 2 + 2, 9);
 	int G = std::max(5 - current_level_number / 2, 2);
 	int L = std::min(2 + current_level_number, 21);
+	int T = max(25, 200 - current_level_number);
+	int P = min(15, 2 + (int)(current_level_number * 1.5));
 	number_barrel = L;
 
 	/* There is a 1 in G chance that a new Water Pool or Sonar Kit Goodie will be added */
@@ -122,7 +124,7 @@ int StudentWorld::move()
 		return GWSTATUS_PLAYER_DIED;
 	}
 	for (auto actor : allActors) {
-		actor->doSomething();
+ 		actor->doSomething();
 	}
 	updateDisplayText();
 	addNewItem();
@@ -183,6 +185,10 @@ std::string StudentWorld::format() {
 }
 void StudentWorld::updateDisplayText() {
 	setGameStatText(format());
+}
+void StudentWorld::dropSquirt() {
+	Actor* squirt = new Squirt(this, this->player->x(), this->player->y(), this->player->getDirection());
+	allActors.push_back(squirt);
 }
 // Students:  Add code to this file (if you wish), StudentWorld.h, Actor.h and Actor.cpp
 

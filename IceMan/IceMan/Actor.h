@@ -39,8 +39,8 @@ public:
 		this->setVisible(false);
 	}
 	bool isAlive() { return this->_alive; }
-	int x() { return this->_x; };
-	int y() { return this->_y; };
+	int x() { return this->getX(); };
+	int y() { return this->getY(); };
 };
 class Ice : public Actor {
 public:
@@ -50,9 +50,14 @@ public:
 	~Ice() { }
 };
 class Boulder : public Actor {
+private:
+	int countdown;
+	bool rolling;
 public:
 	Boulder(GameWorld* gw, int x, int y): 
-		Actor(gw, IID_BOULDER, true, x, y, down, 1, 1) {
+		Actor(gw, IID_BOULDER, true, x, y, down, 1, 1), 
+		rolling(false),
+		countdown(0) {
 	};
 	virtual void doSomething();
 	void removeIce();
@@ -159,6 +164,45 @@ public:
 	HardcoreProtester(GameWorld* gw, int x, int y) :
 		Protester(gw, x, y, IID_HARD_CORE_PROTESTER) {}
 	~HardcoreProtester() {}
+	void doSomething();
+};
+class Squirt : public Actor {
+private:
+	int can_travel;
+public:
+	Squirt(GameWorld* gw, int x, int y, Direction dir) :
+		Actor(gw, IID_WATER_SPURT, false, x, y, dir, 1.0, 1),
+		can_travel(5) {
+		switch (dir) {
+		case right:
+			if (this->x() < VIEW_WIDTH - SPRITE_WIDTH)
+				moveTo(this->x() + SPRITE_WIDTH, this->y());
+			else
+				kill();
+			break;
+		case left:
+			if (this->x() >= SPRITE_WIDTH)
+				moveTo(this->x() - SPRITE_WIDTH, this->y());
+			else
+				kill();
+			break;
+		case up:
+			if (this->y() < VIEW_HEIGHT - SPRITE_HEIGHT)
+				moveTo(this->x(), this->y() + SPRITE_HEIGHT);
+			else
+				kill();
+			break;
+		case down:
+			if (this->y() >= SPRITE_HEIGHT)
+				moveTo(this->x(), this->y() - SPRITE_HEIGHT);
+			else
+				kill();
+			break;
+		}
+		if (_alive)
+			setVisible(true);
+	}
+	~Squirt() {}
 	void doSomething();
 };
 #endif // ACTOR_H_

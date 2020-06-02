@@ -5,15 +5,18 @@
 #include <set>
 #include <stack>
 // Students:  Add code to this file (if you wish), Actor.h, StudentWorld.h, and StudentWorld.cpp
+inline int distance(Actor* o, Actor* t) {
+	return std::pow(o->x() - t->x(), 2) + std::pow(o->y() - t->y(), 2);
+}
 void Gold::doSomething() {
 	if (!_alive) return;
 	if (isPermanent) {
 		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 		Iceman* player = static_cast<Iceman*>(world->getPlayer());
-		if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 16) {
+		if (distance(this, player) <= 16) {
 			setVisible(true);
 		}
-		if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+		if (distance(this, player) <= 9) {
 			player->addGold();
 			world->increaseScore(10);
 			kill();
@@ -32,10 +35,12 @@ void Barrel::doSomething() {
 	if (!_alive) return;
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 16) {
+	if (distance(this, player) <= 16) {
 		setVisible(true);
+		return;
 	}
-	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+	if (distance(this, player) <= 9) {
+		world->playSound(SOUND_FOUND_OIL);
 		player->addBarrel();
 		world->increaseScore(1000);
 		kill();
@@ -43,7 +48,40 @@ void Barrel::doSomething() {
 }
 
 void Boulder::doSomething() {
-
+	if (this->countdown > 0) {
+		this->countdown -= 1;
+		return;
+	}
+	if (!this->rolling) {
+		bool no_support = true;
+		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+		for (int dx = 0; dx < 4; dx++) {
+			Ice* ice = dynamic_cast<Ice*>(world->at(this->x() + dx, this->y() - 1));
+			no_support &= (ice == nullptr);
+			if (!no_support)
+				return;
+		}
+		if (no_support) {
+			this->rolling = true;
+			this->countdown = 30;
+		}
+	}
+	else {
+		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+		if (distance(world->getPlayer(), this) <= 6) {
+			world->getPlayer()->kill();
+			this->kill();
+			return;
+		}
+		for (int dx = 0; dx < 4; dx++) {
+			Ice* ice = dynamic_cast<Ice*>(world->at(this->x() + dx, this->y() - 1));
+			if (ice != nullptr) {
+				this->kill();
+				return;
+			}
+		}
+		this->moveTo(this->x(), this->y() - 1);
+	}
 }
 
 void Sonar::doSomething() {
@@ -55,7 +93,8 @@ void Sonar::doSomething() {
 	}
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+	if (distance(this, player) <= 9) {
+		world->playSound(SOUND_GOT_GOODIE);
 		player->addSonar();
 		world->increaseScore(75);
 		kill();
@@ -71,7 +110,7 @@ void Water::doSomething() {
 	}
 	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if ((std::pow(this->x() - player->x(), 2) + std::pow(this->y() - player->y(), 2)) <= 9) {
+	if (distance(this, player) <= 9) {
 		player->addSquirt();
 		world->increaseScore(100);
 		kill();
@@ -129,6 +168,11 @@ void Iceman::doSomething() {
 			break;
 		case KEY_PRESS_SPACE:
 			/*... add a Squirt in front of the player...; */
+			if (this->squirt() > 0) {
+				StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+				world->dropSquirt();
+				//this->number_squirt--;
+			}
 			break;
 			// etc…
 		}
@@ -272,6 +316,56 @@ bool Protester::passable(int x, int y) {
 }
 void HardcoreProtester::doSomething() {
 	Protester::doSomething();
+}
+void Squirt::doSomething() {
+	if (!_alive)
+		return;
+	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+	Actor* tile = world->at(this->x(), this->y());
+	if (dynamic_cast<Ice*>(tile) != nullptr) {
+		this->kill();
+		return;
+	}
+	if (dynamic_cast<Boulder*>(tile) != nullptr) {
+		this->kill();
+		return;
+	}
+
+	if (this->can_travel > 0) {
+		this->can_travel--;
+		switch (this->getDirection())
+		{
+		case right:
+			if (this->x() < VIEW_WIDTH - SPRITE_WIDTH)
+				this->moveTo(this->x() + 1, this->y());
+			else
+				this->kill();
+			break;
+		case left:
+			if (this->x() > 0)
+				this->moveTo(this->x() - 1, this->y());
+			else
+				this->kill();
+			break;
+		case up:
+			if (this->y() < VIEW_HEIGHT - SPRITE_HEIGHT)
+				this->moveTo(this->x(), this->y() + 1);
+			else
+				this->kill();
+			break;
+		case down:
+			if (this->y() > 0)
+				this->moveTo(this->x(), this->y() - 1);
+			else
+				this->kill();
+			break;
+		default:
+			break;
+		}
+	}
+	if (this->can_travel == 0) {
+		this->kill();
+	}
 }
 struct AStarNode {
 	int y;
