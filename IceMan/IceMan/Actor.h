@@ -171,7 +171,7 @@ public:
 	Protester(StudentWorld* gw, int x, int y, const int IID= IID_PROTESTER) :
 		Actor(gw, IID, true, x, y) {
 		this->ticksToWaitBetweenMoves = maxWait();
-		this->step = 10;
+		this->numSquaresToMoveInCurrentDirection = 10;
 		this->leaving = false;
 	}
 	~Protester() {}
