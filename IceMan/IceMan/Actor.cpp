@@ -4,173 +4,231 @@
 #include <utility>
 #include <set>
 #include <stack>
+using namespace std;
 // Students:  Add code to this file (if you wish), Actor.h, StudentWorld.h, and StudentWorld.cpp
-inline int distance(Actor* o, Actor* t) {
+
+inline double distance_square(Actor* o, Actor* t) {
 	return std::pow(o->x() - t->x(), 2) + std::pow(o->y() - t->y(), 2);
 }
+
 void Gold::doSomething() {
-	if (!_alive) return;
+	if (!isAlive()) return;
 	if (isPermanent) {
-		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-		Iceman* player = static_cast<Iceman*>(world->getPlayer());
-		if (distance(this, player) <= 16) {
-			setVisible(true);
-		}
-		if (distance(this, player) <= 9) {
+		Iceman* player = world()->player();
+		if (distance_square(this, player) <= 9) {
+			world()->playSound(SOUND_GOT_GOODIE);
 			player->addGold();
-			world->increaseScore(10);
+			world()->increaseScore(10);
 			kill();
+			return;
+		}
+		if (distance_square(this, player) <= 16) {
+			setVisible(true);
+			return;
 		}
 	}
 	else {
 		this->countdown -= 1;
 		if (this->countdown <= 0) {
-			setVisible(false);
-			this->_alive = false;
+			kill();
+			return;
 		}
 	}
 }
 
+void Gold::setLost() {
+	this->countdown = maxCount();
+	this->isPermanent = false;
+	setVisible(true);
+}
+
 void Barrel::doSomething() {
-	if (!_alive) return;
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (distance(this, player) <= 16) {
-		setVisible(true);
+	if (!isAlive()) return;
+	Iceman* player = world()->player();
+	if (distance_square(this, player) <= 9) {
+		world()->playSound(SOUND_FOUND_OIL);
+		player->addBarrel();
+		world()->increaseScore(1000);
+		kill();
 		return;
 	}
-	if (distance(this, player) <= 9) {
-		world->playSound(SOUND_FOUND_OIL);
-		player->addBarrel();
-		world->increaseScore(1000);
-		kill();
+	if (distance_square(this, player) <= 16) {
+		setVisible(true);
+		return;
 	}
 }
 
 void Boulder::doSomething() {
-	if (this->countdown > 0) {
-		this->countdown -= 1;
-		return;
-	}
+	if (!isAlive()) return;
+	/* State: may be able to fall, check all supporting ices. */
 	if (!this->rolling) {
 		bool no_support = true;
-		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-		for (int dx = 0; dx < 4; dx++) {
-			Ice* ice = dynamic_cast<Ice*>(world->at(this->x() + dx, this->y() - 1));
-			no_support &= (ice == nullptr);
-			if (!no_support)
+		for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+			Ice* ice = dynamic_cast<Ice*>(world()->at(this->x() + dx, this->y() - 1));
+			if (!(no_support &= (ice == nullptr)))
 				return;
 		}
 		if (no_support) {
 			this->rolling = true;
 			this->countdown = 30;
 		}
+		return;
 	}
+	/* State: No supporting ice, about to fall */
+	if (this->countdown > 1) {
+		//Count down to 1.
+		//During countdown, this boulder is still static.
+		this->countdown -= 1;
+		return;
+	}
+	/* State: No supporting ice, about to fall */
+	if (this->countdown == 1) {
+		this->countdown -= 1;
+		/*Now,
+		//This boulder is not a static object on the map.
+		//So we will remove it from the map.
+		//.
+		//Of cause we will also kill it,
+		//So we need also replace it with a moving boulder;*/
+		world()->dropBoulder(this);
+		for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+			for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
+				world()->removeTile<Boulder>(getX() + dx, getY() + dy);
+			}
+		}
+		world()->playSound(SOUND_FALLING_ROCK);
+		return;
+	}
+	/* State: No supporting ice, falling */
 	else {
-		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-		if (distance(world->getPlayer(), this) <= 6) {
-			world->getPlayer()->kill();
+		//Requirment.Boulder.onTick.4.A.(a)
+		if (getY() == 0) { 
 			this->kill();
 			return;
 		}
-		for (int dx = 0; dx < 4; dx++) {
-			Ice* ice = dynamic_cast<Ice*>(world->at(this->x() + dx, this->y() - 1));
-			if (ice != nullptr) {
+		//Requirment.Boulder.onTick.4.A.(b/c)
+		for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
+			Actor* tile = world()->at(this->x() + dx, this->y() - 1);
+			if (dynamic_cast<Ice*>(tile) != nullptr || dynamic_cast<Boulder*>(tile) != nullptr) {
 				this->kill();
 				return;
 			}
 		}
+		//Requirment.Boulder.onTick.4.B
+		if (distance_square(world()->player(), this) <= 9) {
+			world()->player()->kill();
+			this->kill();
+			return;
+		}
 		this->moveTo(this->x(), this->y() - 1);
 	}
 }
-
-void Sonar::doSomething() {
-	if (!_alive) return;
+int Supply::maxCount() {
+	return std::max(100, 300 - int(10 * world()->getLevel()));
+}
+void Supply::doSomething() {
+	if (!isAlive()) return;
 	this->countdown -= 1;
 	if (this->countdown <= 0) {
 		setVisible(false);
 		this->_alive = false;
 	}
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (distance(this, player) <= 9) {
-		world->playSound(SOUND_GOT_GOODIE);
-		player->addSonar();
-		world->increaseScore(75);
+	Iceman* player = world()->player();
+	if (distance_square(this, player) <= 9) {
+		world()->playSound(SOUND_GOT_GOODIE);
+		this->receiveSupply();
 		kill();
 	}
 }
 
-void Water::doSomething() {
-	if (!_alive) return;
-	this->countdown -= 1;
-	if (this->countdown <= 0) {
-		setVisible(false);
-		this->_alive = false;
-	}
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-	Iceman* player = static_cast<Iceman*>(world->getPlayer());
-	if (distance(this, player) <= 9) {
-		player->addSquirt();
-		world->increaseScore(100);
-		kill();
-	}
+void Water::receiveSupply() {
+	world()->player()->addSquirt();
+	world()->increaseScore(100);
+}
+
+void Sonar::receiveSupply() {
+	world()->player()->addSonar();
+	world()->increaseScore(75);
 }
 
 void Iceman::doSomething() {
+	if (!isAlive()) return;
 	int ch;
-	if (getWorld()->getKey(ch) == true)
+	int x, y; /* temp var for actor's current position */
+	if (world()->getKey(ch) == true)
 	{
 		// user hit a key this tick!
 		switch (ch)
 		{
 		case KEY_PRESS_LEFT:
 			/*... move player to the left ...;*/
+			x = getX() - 1;
+			y = getY();
 			setDirection(left);
-			if (this->passable(this->_x-1, this->_y)) {
-				this->_x -= 1;
-				removeTile();
-				moveTo(this->_x, this->_y);
+			if (passable(x, y)) {
+				removeTile(x, y);
+				moveTo(x, y);
 			}
 			break;
 		case KEY_PRESS_RIGHT:
 			/*... move player to the right ...; */
+			x = getX() + 1;
+			y = getY();
 			setDirection(right);
-			if (this->passable(this->_x + 1, this->_y)) {
-				this->_x += 1;
-				removeTile();
-				moveTo(this->_x, this->_y);
+			if (passable(x, y)) {
+				removeTile(x, y);
+				moveTo(x, y);
 			}
 			break;
 		case KEY_PRESS_DOWN:
+			/*... move player down ...; */
+			x = getX();
+			y = getY() - 1;
 			setDirection(down);
-			if (this->passable(this->_x, this->_y - 1)) {
-				this->_y -= 1;
-				removeTile();
-				moveTo(this->_x, this->_y);
+			if (passable(x, y)) {
+				removeTile(x, y);
+				moveTo(x, y);
 			}
 			break;
 		case KEY_PRESS_UP:
+			/*... move player up ...; */
+			x = getX();
+			y = getY() + 1;
 			setDirection(up);
-			if (this->passable(this->_x, this->_y + 1)) {
-				this->_y += 1;
-				removeTile();
-				moveTo(this->_x, this->_y);
+			if (passable(x, y)) {
+				removeTile(x, y);
+				moveTo(x, y);
 			}
 			break;
 		case 'z':
 		case 'Z':
 			if (this->sonar() > 0) {
-				this->number_sonar -= 1;
+				//this->number_sonar -= 1;
+				world()->allTreasure([this](Actor* item) {
+					if (distance_square(this, item) <= 144) {
+						item->setVisible(false);
+					}
+				});
 			}
+			break;
+		case 'k':
+		case 'K':
+			world()->killAll<Protester>();
+			break;
+		case KEY_PRESS_TAB:
+			if (this->gold() > 0) {
+				//this->number_gold -= 1;
+				world()->dropGold(this);
+			}
+			break;
 		case KEY_PRESS_ESCAPE:
-			this->hit_point = 0;
+			kill();
 			break;
 		case KEY_PRESS_SPACE:
 			/*... add a Squirt in front of the player...; */
 			if (this->squirt() > 0) {
-				StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-				world->dropSquirt();
+				world()->dropSquirt(this);
+				world()->playSound(SOUND_PLAYER_SQUIRT);
 				//this->number_squirt--;
 			}
 			break;
@@ -181,10 +239,9 @@ void Iceman::doSomething() {
 bool Iceman::passable(int x, int y) {
 	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
 		return false;
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
 		for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
-			if (dynamic_cast<Boulder*>(world->at(x + dx, y + dy)) != nullptr) {
+			if (dynamic_cast<Boulder*>(world()->at(x + dx, y + dy)) != nullptr) {
 				return false;
 			}
 		}
@@ -206,100 +263,132 @@ int Iceman::barrel() {
 int Iceman::health() {
 	return this->hit_point;
 }
-void Iceman::addGold() {
+inline void Iceman::addGold() {
 	this->number_gold += 1;
 }
-void Iceman::addSonar() {
+inline void Iceman::addSonar() {
 	this->number_sonar += 1;
 }
-void Iceman::addSquirt() {
+inline void Iceman::addSquirt() {
 	this->number_squirt += 5;
 }
-void Iceman::addBarrel() {
+inline void Iceman::addBarrel() {
 	this->number_barrel += 1;
 }
-void Iceman::removeTile() const {
-
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
+void Iceman::removeTile(int x, int y) {
 	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
 		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			Ice* tile = dynamic_cast<Ice*>(world->at(this->_x + deltaX, this->_y + deltaY));
-			if (tile != nullptr) {
-				world->removeIce(tile);
-			}
+			world()->removeTile<Ice>(x + deltaX, y + deltaY);
 		}
 	}
 }
+
+void Iceman::kill() {
+	this->hit_point = 0;
+	world()->playSound(SOUND_PLAYER_GIVE_UP);
+}
+int Protester::maxWait() {
+	return std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
+}
+
 void Protester::doSomething() {
-	if (!this->_alive)
+	if (!isAlive()) return;
+	if (this->ticksToWaitBetweenMoves > 0) {
+		this->ticksToWaitBetweenMoves--;
 		return;
-	if (this->ticksToWaitBetweenMoves == 0) {
-		if (this->step > 0)
-			this->step -= 1;
-		this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
+	}
+	this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
+	if (this->leaving) {
+		if (path.size() > 0) {
+			std::pair<int, int> p = path.front();
+			path.pop();
+			/* Adjust facing */
+			Direction dir;
+			if (p.first > getX())
+				dir = right;
+			else if (p.first < getX())
+				dir = left;
+			else if (p.second > getY())
+				dir = up;
+			else
+				dir = down;
+			if (getDirection() != dir)
+				setDirection(dir);
+			/* Advance */
+			moveTo(p.first, p.second);
+		}
+		else {
+			kill();
+		}
+		return;
+	}
 
-		StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-		std::set<Direction> possible_move;
-		if (this->passable(this->_x + 1, this->_y))
-			possible_move.emplace(right);
-		if (this->passable(this->_x - 1, this->_y))
-			possible_move.emplace(left);
-		if (this->passable(this->_x, this->_y + 1))
-			possible_move.emplace(up);
-		if (this->passable(this->_x, this->_y - 1))
-			possible_move.emplace(down);
 
+	/* Random motion */
+	if (this->numSquaresToMoveInCurrentDirection > 0)
+		this->numSquaresToMoveInCurrentDirection -= 1;
 
-		Direction dir = getDirection();
-		bool can_move_forward = std::find(possible_move.begin(), possible_move.end(), dir) != possible_move.end();
-		if (!can_move_forward) {
+	std::set<Direction> possible_move;
+	if (passable(getX() + 1, getY()))
+		possible_move.emplace(right);
+	if (passable(getX() - 1, getY()))
+		possible_move.emplace(left);
+	if (passable(getX(), getY() + 1))
+		possible_move.emplace(up);
+	if (passable(getX(), getY() - 1))
+		possible_move.emplace(down);
+
+	Direction dir = getDirection();
+	bool can_move_forward = std::find(possible_move.begin(), possible_move.end(), dir) != possible_move.end();
+	if (!can_move_forward) {
+		std::set<Direction>::iterator it = possible_move.begin();
+		for (int i = world()->rand(0, possible_move.size() - 1); i > 0; i--) {
+			it++;
+		}
+		dir = *(it);
+	}
+	else if (possible_move.size() > 2) {
+		if (world()->rand(0, 100) > 30 && this->numSquaresToMoveInCurrentDirection == 0) {
+			possible_move.erase(dir);
 			std::set<Direction>::iterator it = possible_move.begin();
-			for (int i = world->rand(0, possible_move.size() - 1); i > 0; i--) {
+			for (int i = world()->rand(0, possible_move.size() - 1);i > 0;i--) {
 				it++;
 			}
 			dir = *(it);
-		}
-		else if (possible_move.size() > 2) {
-			if (world->rand(0, 100) > 30 && this->step == 0) {
-				possible_move.erase(dir);
-				std::set<Direction>::iterator it = possible_move.begin();
-				for (int i = world->rand(0, possible_move.size() - 1);i > 0;i--) {
-					it++;
-				}
-				dir = *(it);
-				this->step = 5 + world->rand(0, 20);
-			}
-		}
-
-		switch (dir)
-		{
-		case right:
-			setDirection(right);
-			this->_x += 1;
-			moveTo(this->_x, this->_y);
-			break;
-		case left:
-			setDirection(left);
-			this->_x -= 1;
-			moveTo(this->_x, this->_y);
-			break;
-		case up:
-			setDirection(up);
-			this->_y += 1;
-			moveTo(this->_x, this->_y);
-			break;
-		case down:
-			setDirection(down);
-			this->_y -= 1;
-			moveTo(this->_x, this->_y);
-			break;
-		default:
-			break;
+			this->numSquaresToMoveInCurrentDirection = 8 + world()->rand(0, 52);
 		}
 	}
-	else {
-		this->ticksToWaitBetweenMoves -= 1;
+	int x, y; /* temp var for actor's current position */
+	switch (dir)
+	{
+	case right:
+		x = getX() + 1;
+		y = getY();
+		setDirection(right);
+		moveTo(x, y);
+		break;
+	case left:
+		x = getX() - 1;
+		y = getY();
+		setDirection(left);
+		moveTo(x, y);
+		break;
+	case up:
+		x = getX();
+		y = getY() + 1;
+		setDirection(up);
+		moveTo(x, y);
+		break;
+	case down:
+		x = getX();
+		y = getY() - 1;
+		setDirection(down);
+		moveTo(x, y);
+		break;
+	default:
+		break;
 	}
+	return;
 }
 bool Protester::passable(int x, int y) {
 	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
@@ -314,14 +403,21 @@ bool Protester::passable(int x, int y) {
 	}
 	return true;
 }
+void Protester::defeat() {
+	this->path = aStarSearch<VIEW_WIDTH, VIEW_HEIGHT>(
+		world()->map, 
+		make_pair(getX(), getY()), 
+		make_pair(60, 60),
+		[this](int x, int y) -> bool { return this->passable(x, y); }
+	);
+	this->leaving = true;
+}
 void HardcoreProtester::doSomething() {
 	Protester::doSomething();
 }
 void Squirt::doSomething() {
-	if (!_alive)
-		return;
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
-	Actor* tile = world->at(this->x(), this->y());
+	if (!isAlive()) return;
+	Actor* tile = world()->at(this->x(), this->y());
 	if (dynamic_cast<Ice*>(tile) != nullptr) {
 		this->kill();
 		return;
@@ -367,181 +463,4 @@ void Squirt::doSomething() {
 		this->kill();
 	}
 }
-struct AStarNode {
-	int y;
-	int x;
-	int parentX;
-	int parentY;
-	double g;
-	double h;
-	double f;
-};
-inline bool operator < (const AStarNode& lhs, const AStarNode& rhs)
-{//We need to overload "<" to put our struct into a set
-	if (lhs.y < rhs.y)
-		return true;
-	else if (lhs.y > rhs.y)
-		return false;
-	else
-		return lhs.x < rhs.x;
-}
-template <int ROW, int COL>
-class AStar {
-private:
-	bool closedList[ROW][COL];
-	AStarNode map[ROW][COL];
-public:
-	AStar() {
-		for (int x = 0; x < ROW; x++) {
-			for (int y = 0; y < COL; y++) {
-				closedList[x][y] = false;
-				map[x][y].f = FLT_MAX;
-				map[x][y].g = FLT_MAX;
-				map[x][y].h = FLT_MAX;
-				map[x][y].parentX = -1;
-				map[x][y].parentY = -1;
-				map[x][y].x = x;
-				map[x][y].y = y;
-			}
-		}
-	}
-	double calculateH(int x, int y, int tx, int ty) {
-		double H = (sqrt((x - tx) * (x - tx)
-			+ (y - ty) * (y - ty)));
-		return H;
-	}
-	std::vector<AStarNode> makePath(std::pair<int, int> dest) {
-		int grid[ROW][COL] =
-		{
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-		};
-		try {
-			cout << "Found a path" << endl;
-			int x = dest.first;
-			int y = dest.second;
-			std::stack<AStarNode> path;
-			std::vector<AStarNode> usablePath;
 
-			while (!(map[x][y].parentX == x && map[x][y].parentY == y)
-				&& map[x][y].x != -1 && map[x][y].y != -1)
-			{
-				path.push(map[x][y]);
-				int tempX = map[x][y].parentX;
-				int tempY = map[x][y].parentY;
-				x = tempX;
-				y = tempY;
-
-			}
-			path.push(map[x][y]);
-
-			while (!path.empty()) {
-				AStarNode top = path.top();
-				path.pop();
-				//cout << top.x << " " << top.y << endl;
-				grid[top.x][top.y] = 1;
-				usablePath.emplace_back(top);
-			}
-			for (int x = 0; x < ROW; x++) {
-				for (int y = 0; y < COL; y++) {
-					std::cout << grid[x][y] << " ";
-				}
-				std::cout << std::endl;
-			}
-			return usablePath;
-		}
-		catch (const exception & e) {
-			std::cout << e.what() << std::endl;
-		}
-	}
-	std::vector<AStarNode> search(std::pair<int, int> alpha, std::pair<int, int> omega, int grid[ROW][COL]) {
-		int x0 = alpha.first;  //original x value
-		int y0 = alpha.second; //original y value
-		int tx = omega.first;
-		int ty = omega.second;
-		map[x0][y0].f = 0.0;
-		map[x0][y0].g = 0.0;
-		map[x0][y0].h = 0.0;
-		map[x0][y0].parentX = x0;
-		map[x0][y0].parentY = y0;
-		set<AStarNode> openList;
-		openList.emplace(map[x0][y0]);
-		while (!openList.empty()) {
-			AStarNode node;
-			double temp = FLT_MAX;
-			std::set<AStarNode>::iterator itNode = openList.end();
-			for (std::set<AStarNode>::iterator it = openList.begin();
-				it != openList.end(); it = next(it)) {
-				AStarNode n = *it;
-				if (n.f < temp) {
-					temp = n.f;
-					itNode = it;
-				}
-			}
-			node = *itNode;
-			cout << "p" << (*itNode).x << " " << (*itNode).y << " f " << (*itNode).f << endl;
-			openList.erase(node);
-
-			x0 = node.x;
-			y0 = node.y;
-			closedList[x0][y0] = true;
-			for (int dx = -1; dx <= 1; dx++) {
-				for (int dy = -1; dy <= 1; dy++) {
-					if ((dx == 1 && dy == 1) || (dx == 1 && dy == -1) || (dx == -1 && dy == 1) || (dx == -1 && dy == -1)) {
-						continue;
-					}
-					if (x0 + dx < 0 || y0 + dy < 0 || x0 + dx >= COL || y0 + dy >= ROW) {
-						continue;
-					}
-					if (x0 + dx == tx && y0 + dy == ty) {
-						map[x0 + dx][y0 + dy].parentX = x0;
-						map[x0 + dx][y0 + dy].parentY = y0;
-						return makePath(omega);
-					}
-					if (closedList[x0 + dx][y0 + dy] == false) {
-						double g = FLT_MAX;
-						double h = FLT_MAX;
-						double f = FLT_MAX;
-						if (grid[x0 + dx][y0 + dy] == 1) {
-							g = node.g + 1.0;
-							h = calculateH(x0 + dx, y0 + dy, tx, ty);
-							f = g + h;
-						}
-						if (map[x0 + dx][y0 + dy].f == FLT_MAX ||
-							map[x0 + dx][y0 + dy].f > f) {
-							cout << "__" << x0 + dx << " " << y0 + dy << " f" << f << endl;
-							map[x0 + dx][y0 + dy].f = f;
-							map[x0 + dx][y0 + dy].g = g;
-							map[x0 + dx][y0 + dy].h = h;
-							map[x0 + dx][y0 + dy].parentX = x0;
-							map[x0 + dx][y0 + dy].parentY = y0;
-							openList.emplace(map[x0 + dx][y0 + dy]);
-							for (set<AStarNode>::iterator it = openList.begin();
-								it != openList.end(); it = next(it)) {
-								AStarNode n = *it;
-								cout << ":" << (*it).x << " " << (*it).y << " f " << (*it).f << endl;
-								if (n.f < temp) {
-									temp = n.f;
-									itNode = it;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		return makePath(omega);
-	}
-};
-
-template <int ROW, int COL>
-void aStarSearch(int grid[ROW][COL], std::pair<int, int> src, std::pair<int, int> dest) {
-	auto a = AStar<ROW, COL>();
-	a.search(src, dest, grid);
-}

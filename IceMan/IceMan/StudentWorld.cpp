@@ -1,5 +1,7 @@
 #include "StudentWorld.h"
+#include "Actor.h"
 #include <string>
+
 using namespace std;
 
 GameWorld* createStudentWorld(string assetDir)
@@ -8,30 +10,46 @@ GameWorld* createStudentWorld(string assetDir)
 }
 StudentWorld::StudentWorld(std::string assetDir)
 	: GameWorld(assetDir)
-{
-	t += 1;
+{ }
+
+// Students:  Add code to this file (if you wish), StudentWorld.h, Actor.h and Actor.cpp
+
+/* withinMap
+Check if the position is outside of the map.
+*/
+inline bool StudentWorld::outsideMap(int x, int y) {
+	return (x < 0 || y < 0 || x >= VIEW_WIDTH || y >= VIEW_WIDTH);
 }
 
-// Get a tile from a specific location.
+/* at
+Get a tile from the map.
+* A tile can be an 'Ice' object or a 'boulder' object.
+* This method will return nullptr if
+* 1. position (x, y) is outside of the map.
+* 2. map[x][y] contains nullptr.
+*/
 Actor* StudentWorld::at(int x, int y) {
-	if (x < 0 || y < 0 || x >= VIEW_WIDTH || y >= VIEW_WIDTH)
+	if (outsideMap(x, y))
 		return nullptr;
 	else
 		return map[x][y];
 }
-void StudentWorld::removeIce(Ice* ice) {
-	map[ice->x()][ice->y()] = nullptr;
-	ice->kill();
+
+/* player
+Return the only 'Iceman' object as a player.
+*/
+Iceman* StudentWorld::player() {
+	return _player;
 }
-Actor* StudentWorld::getPlayer() {
-	return player;
-}
+
+/* onInit */
 int StudentWorld::init()
 {
 	Actor* tile;
-	/*clean up map array*/memset(map, 0, sizeof(map));
 
 	int current_level_number = getLevel();
+
+	/*clean up map array*/memset(this->map, 0, sizeof(this->map));
 
 	/* Calculate the number of boulders, gold nuggets and barrels of oil */
 	int B = std::min(current_level_number / 2 + 2, 9);
@@ -48,7 +66,6 @@ int StudentWorld::init()
 		int x = rand(0, VIEW_HEIGHT - SPRITE_HEIGHT);
 		int y = rand(20, 56);
 		tile = new Boulder(this, x, y);
-		allItems.push_back(tile);
 		allActors.push_back(tile);
 
 		/* A boulder should occupy the 4x4 space */
@@ -76,13 +93,13 @@ int StudentWorld::init()
 	/* Gold */
 	for (int n = 0; n < G; n++) {
 		tile = new Gold(this, rand(0, VIEW_HEIGHT - SPRITE_HEIGHT), rand(20, 56));
-		allItems.push_back(tile);
+		treasure.push_back(tile);
 		allActors.push_back(tile);
 	}
 	/* Barrel */
 	for (int n = 0; n < L; n++) {
 		tile = new Barrel(this, rand(0, VIEW_HEIGHT - SPRITE_HEIGHT), rand(20, 56));
-		allItems.push_back(tile);
+		treasure.push_back(tile);
 		allActors.push_back(tile);
 	}
 	/* Water */
@@ -90,8 +107,8 @@ int StudentWorld::init()
 	allActors.push_back(tile);
 
 	/* Iceman */
-	player = new Iceman(this);
-	allActors.push_back(player);
+	this->_player = new Iceman(this);
+	this->allActors.push_back(this->_player);
 
 	/* Protesters */
 
@@ -99,39 +116,33 @@ int StudentWorld::init()
 	allActors.push_back(new HardcoreProtester(this, 60, 60));
 	return GWSTATUS_CONTINUE_GAME;
 }
-void StudentWorld::addNewItem() {
-	if (rand(0, this->G_chance) < 1) {
-		if (rand(0, 5) < 1) {
-			/* Add a new Sonar */
-			allActors.push_back(new Sonar(this, 0, VIEW_HEIGHT - SPRITE_HEIGHT));
-		}
-		else {
-			/* Add a water pool */
-			allActors.push_back(new Water(this, VIEW_WIDTH - SPRITE_WIDTH, VIEW_HEIGHT - SPRITE_HEIGHT));
-		}
-	}
-}
+
+/* onMove */
 int StudentWorld::move()
 {
-	// This code is here merely to allow the game to build, run, and terminate after you hit enter a few times.
-	// Notice that the return value GWSTATUS_PLAYER_DIED will cause our framework to end the current level.
-	//decLives();
 	if (getNumberOfBarrelsRemainingToBePickedUp() == 0) {
 		return GWSTATUS_FINISHED_LEVEL;
 	}
-	if (player->health() == 0) {
+	if (player()->health() == 0) {
 		decLives();
 		return GWSTATUS_PLAYER_DIED;
 	}
+
 	for (auto actor : allActors) {
- 		actor->doSomething();
+		if (actor->isAlive())
+			actor->doSomething();
+		else {
+			allActors.remove(actor);
+			delete actor;
+		}
+
 	}
 	updateDisplayText();
-	addNewItem();
+	dropNewItem();
 
 	auto it = allActors.begin();
 	while (it != allActors.end()) {
-		if (!(*it)->isAlive()) {
+		if (!static_cast<Actor*>(*it)->isAlive()) {
 			delete (*it);
 			it = allActors.erase(it);
 		}
@@ -141,29 +152,46 @@ int StudentWorld::move()
 	}
 	return GWSTATUS_CONTINUE_GAME;
 }
+
+/* onCleanUp */
 void StudentWorld::cleanUp()
 {
-	for (auto each : allActors) {
-		delete each;
+	for (auto actor : allActors) {
+		delete actor;
 	}
-	allActors.erase(allActors.begin(), allActors.end());
+	this->allActors.clear();
+	this->treasure.clear();
+	this->_player = nullptr;
+	this->G_chance = 0;
+	this->number_barrel = 0;
+
+	/*clean up map array*/memset(this->map, 0, sizeof(this->map));
 }
-int StudentWorld::getPlayerGoldCount() {
-	return player->gold();
+
+/* Below are helper functions to support updateDisplayText()
+* getPlayerGoldCount()
+* getSquirtsLeftInSquirtGun()
+* getPlayerSonarChargeCount()
+* getCurrentHealth()
+* getNumberOfBarrelsRemainingToBePickedUp()
+* format()
+*/
+inline int StudentWorld::getPlayerGoldCount() {
+	return player()->gold();
 }
-int StudentWorld::getSquirtsLeftInSquirtGun() {
-	return player->squirt();
+inline int StudentWorld::getSquirtsLeftInSquirtGun() {
+	return player()->squirt();
 }
-int StudentWorld::getPlayerSonarChargeCount() {
-	return player->sonar();
+inline int StudentWorld::getPlayerSonarChargeCount() {
+	return player()->sonar();
 }
-int StudentWorld::getCurrentHealth() {
-	return player->health() * 10;
+inline int StudentWorld::getCurrentHealth() {
+	return player()->health() * 10;
 }
-int StudentWorld::getNumberOfBarrelsRemainingToBePickedUp() {
-	return this->number_barrel - player->barrel();
+inline int StudentWorld::getNumberOfBarrelsRemainingToBePickedUp() {
+	return this->number_barrel - player()->barrel();
 }
-std::string StudentWorld::format() {
+inline std::string StudentWorld::format() {
 	std::ostringstream ostr;
 	ostr << "Lvl: "
 		<< std::setw(2) << getLevel()
@@ -183,12 +211,71 @@ std::string StudentWorld::format() {
 		<< std::setw(6) << getScore();
 	return ostr.str();
 }
-void StudentWorld::updateDisplayText() {
+/* updateDisplayText
+* Draw status text on top of the screen.
+* This method is only called by move().
+*/
+inline void StudentWorld::updateDisplayText() {
 	setGameStatText(format());
 }
-void StudentWorld::dropSquirt() {
-	Actor* squirt = new Squirt(this, this->player->x(), this->player->y(), this->player->getDirection());
-	allActors.push_back(squirt);
-}
-// Students:  Add code to this file (if you wish), StudentWorld.h, Actor.h and Actor.cpp
 
+/* dropSquirt
+Drop a squirt on the map based on player's position and facing.
+*/
+bool StudentWorld::dropSquirt(Actor* actor) {
+	Actor* squirt = new Squirt(this, actor->getX(), actor->getY(), actor->getDirection());
+	allActors.push_back(squirt);
+	return true; /* always return true to match the pattern of other dropXXX functions */
+}
+/* dropGold
+Drop a gold on the map based on player's position.
+*/
+bool StudentWorld::dropGold(Actor* actor) {
+	Gold* gold = new Gold(this, actor->getX(), actor->getY());
+	gold->setLost();
+	allActors.push_back(gold);
+	return true; /* always return true to match the pattern of other dropXXX functions */
+}
+
+/* dropNewItem
+Drop a new item, a sonar or water pool, based on probability.
+*/
+bool StudentWorld::dropNewItem() {
+	if (rand(0, this->G_chance) < 1) {
+		if (rand(0, 5) < 1) {
+			/* Add a new Sonar */
+			allActors.push_back(new Sonar(this, 0, VIEW_HEIGHT - SPRITE_HEIGHT));
+		}
+		else {
+			/* Add a water pool */
+			allActors.push_back(new Water(this, VIEW_WIDTH - SPRITE_WIDTH, VIEW_HEIGHT - SPRITE_HEIGHT));
+		}
+		return true;
+	}
+	return false;
+}
+
+/* dropEnemy
+Drop a protester,normal or hardcore, based on probability.
+*/
+bool StudentWorld::dropEnemy() {
+	return false;
+}
+
+/* dropBoulder
+Drop a falling boulder to replace the static boulder.
+*/
+bool StudentWorld::dropBoulder(Boulder* boulder) {
+	Boulder* stone = new Boulder(*boulder);
+	allActors.push_back(stone);
+	return false;
+}
+
+/* allTreasure
+Iterate all hidden items with a callback lambda function.
+*/
+void StudentWorld::allTreasure(std::function<void(Actor*)> callback) {
+	for (auto item : treasure) {
+		callback(item);
+	}
+}
