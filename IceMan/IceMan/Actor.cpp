@@ -29,6 +29,14 @@ void Gold::doSomething() {
 	}
 	else {
 		this->countdown -= 1;
+		for (auto p : world()->protesters()) {
+			if (distance_square(this, p) <= 9) {
+				world()->playSound(SOUND_PROTESTER_FOUND_GOLD);
+				kill();
+				p->bebribed();
+				return;
+			}
+		}
 		if (this->countdown <= 0) {
 			kill();
 			return;
@@ -117,8 +125,12 @@ void Boulder::doSomething() {
 		//Requirment.Boulder.onTick.4.B
 		if (distance_square(world()->player(), this) <= 9) {
 			world()->player()->kill();
-			this->kill();
-			return;
+		}
+		for (auto p : world()->protesters()) {
+			if (distance_square(p, this) <= 9) {
+				p->beannoyed(100);
+				world()->increaseScore(500);
+			}
 		}
 		this->moveTo(this->x(), this->y() - 1);
 	}
@@ -162,9 +174,12 @@ void Iceman::doSomething() {
 		{
 		case KEY_PRESS_LEFT:
 			/*... move player to the left ...;*/
+			if (getDirection() != left) {
+				setDirection(left);
+				return;
+			}
 			x = getX() - 1;
 			y = getY();
-			setDirection(left);
 			if (passable(x, y)) {
 				removeTile(x, y);
 				moveTo(x, y);
@@ -172,9 +187,12 @@ void Iceman::doSomething() {
 			break;
 		case KEY_PRESS_RIGHT:
 			/*... move player to the right ...; */
+			if (getDirection() != right) {
+				setDirection(right);
+				return;
+			}
 			x = getX() + 1;
 			y = getY();
-			setDirection(right);
 			if (passable(x, y)) {
 				removeTile(x, y);
 				moveTo(x, y);
@@ -182,6 +200,10 @@ void Iceman::doSomething() {
 			break;
 		case KEY_PRESS_DOWN:
 			/*... move player down ...; */
+			if (getDirection() != down) {
+				setDirection(down);
+				return;
+			}
 			x = getX();
 			y = getY() - 1;
 			setDirection(down);
@@ -192,9 +214,12 @@ void Iceman::doSomething() {
 			break;
 		case KEY_PRESS_UP:
 			/*... move player up ...; */
+			if (getDirection() != up) {
+				setDirection(up);
+				return;
+			}
 			x = getX();
 			y = getY() + 1;
-			setDirection(up);
 			if (passable(x, y)) {
 				removeTile(x, y);
 				moveTo(x, y);
@@ -216,6 +241,8 @@ void Iceman::doSomething() {
 			world()->killAll<Protester>();
 			break;
 		case KEY_PRESS_TAB:
+		case 't':
+		case 'T':
 			if (this->gold() > 0) {
 				//this->number_gold -= 1;
 				world()->dropGold(this);
@@ -227,7 +254,23 @@ void Iceman::doSomething() {
 		case KEY_PRESS_SPACE:
 			/*... add a Squirt in front of the player...; */
 			if (this->squirt() > 0) {
-				world()->dropSquirt(this);
+				switch (getDirection())
+				{
+				case left:
+					world()->dropSquirt(this, getX() - SPRITE_WIDTH, getY());
+					break;
+				case right:
+					world()->dropSquirt(this, getX() + SPRITE_WIDTH, getY());
+					break;
+				case up:
+					world()->dropSquirt(this, getX(), getY() + SPRITE_HEIGHT);
+					break;
+				case down:
+					world()->dropSquirt(this, getX(), getY() - SPRITE_HEIGHT);
+					break;
+				default:
+					break;
+				}
 				world()->playSound(SOUND_PLAYER_SQUIRT);
 				//this->number_squirt--;
 			}
@@ -239,12 +282,17 @@ void Iceman::doSomething() {
 bool Iceman::passable(int x, int y) {
 	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
 		return false;
-	for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
-		for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
-			if (dynamic_cast<Boulder*>(world()->at(x + dx, y + dy)) != nullptr) {
-				return false;
-			}
-		}
+	if (dynamic_cast<Boulder*>(world()->at(x + 0, y + 2)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 2, y + 0)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 2, y + 4)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 4, y + 2)) != nullptr) {
+		return false;
 	}
 	return true;
 }
@@ -278,7 +326,8 @@ inline void Iceman::addBarrel() {
 void Iceman::removeTile(int x, int y) {
 	for (int deltaX = 0; deltaX < SPRITE_WIDTH; deltaX++) {
 		for (int deltaY = 0; deltaY < SPRITE_HEIGHT; deltaY++) {
-			world()->removeTile<Ice>(x + deltaX, y + deltaY);
+			if (world()->removeTile<Ice>(x + deltaX, y + deltaY))
+				world()->playSound(SOUND_DIG);
 		}
 	}
 }
@@ -287,17 +336,32 @@ void Iceman::kill() {
 	this->hit_point = 0;
 	world()->playSound(SOUND_PLAYER_GIVE_UP);
 }
+void Iceman::annoyed(int hit) {
+	this->hit_point = std::max(this->hit_point - hit, 0);
+}
 int Protester::maxWait() {
 	return std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
 }
 
 void Protester::doSomething() {
+	int x, y; /* temp var for actor's current position */
 	if (!isAlive()) return;
 	if (this->ticksToWaitBetweenMoves > 0) {
 		this->ticksToWaitBetweenMoves--;
 		return;
 	}
+
 	this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
+
+	if (this->hit_point == 0 && !this->leaving) {
+		this->defeat();
+		return;
+	}
+	if (this->leaving && getX() == 60 && getY() == 60) {
+		kill();
+		return;
+	}
+	/* leaving */
 	if (this->leaving) {
 		if (path.size() > 0) {
 			std::pair<int, int> p = path.front();
@@ -322,11 +386,87 @@ void Protester::doSomething() {
 		}
 		return;
 	}
+	if (this->ticksSinceLastShout > 0) {
+		this->ticksSinceLastShout--;
+	}
+	if (distance_square(this, world()->player()) <= 16) {
+		if (getDirection() == left && world()->player()->getX() < this->getX()) {
+			shout();
+			return;
+		}
 
+		if (getDirection() == right && world()->player()->getX() > this->getX()) {
+			shout();
+			return;
+		}
 
+		if (getDirection() == down && world()->player()->getY() < this->getY()) {
+			shout();
+			return;
+		}
+
+		if (getDirection() == up && world()->player()->getY() > this->getY()) {
+			shout();
+			return;
+		}
+	}
+
+	Iceman* player = world()->player();
+	if (this->getX() == player->getX() || this->getY() == player->getY()) {
+		if (distance_square(this, world()->player()) > 16) {
+			Direction playersDirection;
+			if (player->getX() < this->getX())
+				playersDirection = left;
+			else if (player->getX() > this->getX())
+				playersDirection = right;
+			else if (player->getY() < this->getY())
+				playersDirection = down;
+			else
+				playersDirection = up;
+			if (getDirection() != playersDirection) {
+				bool accessible = true;
+				std::function<int(int)> fx;
+				std::function<int(int)> fy;
+				x = this->getX();
+				y = this->getY();
+				switch (playersDirection) {
+				case left:
+					fx = [](int x) -> int { return x - 1; };
+					fy = [](int y) -> int { return y; };
+					break;
+				case right:
+					fx = [](int x) -> int { return x + 1; };
+					fy = [](int y) -> int { return y; };
+					break;
+				case up:
+					fx = [](int x) -> int { return x; };
+					fy = [](int y) -> int { return y + 1; };
+					break;
+				case down:
+					fx = [](int x) -> int { return x; };
+					fy = [](int y) -> int { return y - 1; };
+					break;
+				}
+				while (x != player->getX() || y != player->getY()) {
+					x = fx(x);
+					y = fy(y);
+					accessible &= passable(x, y);
+					if (!accessible)
+						break;
+				}
+				if (accessible) {
+					setDirection(playersDirection);
+					move(playersDirection, this->getX(), this->getY());
+					return;
+				}
+			}
+		}
+	}
 	/* Random motion */
 	if (this->numSquaresToMoveInCurrentDirection > 0)
-		this->numSquaresToMoveInCurrentDirection -= 1;
+		this->numSquaresToMoveInCurrentDirection--;
+	if (this->ticksSinceLastTurn > 0)
+		this->ticksSinceLastTurn--;
 
 	std::set<Direction> possible_move;
 	if (passable(getX() + 1, getY()))
@@ -346,8 +486,16 @@ void Protester::doSomething() {
 			it++;
 		}
 		dir = *(it);
+		setDirection(dir);
+		/* Reset numSquaresToMoveInCurrentDirection due to changing direction */
+		this->numSquaresToMoveInCurrentDirection = 8 + world()->rand(0, 52);
+		return;
 	}
 	else if (possible_move.size() > 2) {
+		/* make a perpendicular turn */
+		if (ticksSinceLastTurn == 0) {
+			this->ticksSinceLastTurn = 200;
+		}
 		if (world()->rand(0, 100) > 30 && this->numSquaresToMoveInCurrentDirection == 0) {
 			possible_move.erase(dir);
 			std::set<Direction>::iterator it = possible_move.begin();
@@ -358,7 +506,10 @@ void Protester::doSomething() {
 			this->numSquaresToMoveInCurrentDirection = 8 + world()->rand(0, 52);
 		}
 	}
-	int x, y; /* temp var for actor's current position */
+	move(dir, getX(), getY());
+	return;
+}
+void Protester::move(Direction dir, int x, int y) {
 	switch (dir)
 	{
 	case right:
@@ -388,18 +539,28 @@ void Protester::doSomething() {
 	default:
 		break;
 	}
-	return;
 }
-bool Protester::passable(int x, int y) {
+bool Actor::passable(int x, int y) {
 	if (x < 0 || y < 0 || x > VIEW_WIDTH - SPRITE_WIDTH || y > VIEW_HEIGHT - SPRITE_HEIGHT)
 		return false;
-	StudentWorld* world = static_cast<StudentWorld*>(this->_gw);
 	for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
 		for (int dy = 0; dy < SPRITE_HEIGHT; dy++) {
-			if (world->at(x + dx, y + dy) != nullptr) {
+			if (world()->at(x + dx, y + dy) != nullptr) {
 				return false;
 			}
 		}
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 0, y + 2)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 2, y + 0)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 2, y + 4)) != nullptr) {
+		return false;
+	}
+	if (dynamic_cast<Boulder*>(world()->at(x + 4, y + 2)) != nullptr) {
+		return false;
 	}
 	return true;
 }
@@ -412,11 +573,60 @@ void Protester::defeat() {
 	);
 	this->leaving = true;
 }
+void Protester::shout() {
+	if (this->ticksSinceLastShout > 0) {
+		return;
+	}
+	world()->player()->annoyed(2);
+	world()->playSound(SOUND_PROTESTER_YELL);
+	this->ticksSinceLastShout = 15;
+}
+void Protester::bebribed() {
+	this->hit_point = 0;
+	world()->increaseScore(25);
+}
+void Protester::bekilled() {
+	world()->increaseScore(100);
+}
+void Protester::bestunned() {
+	int N = std::max(50, int(100 - world()->getLevel() * 10));
+	wait(N);
+}
+bool Protester::isLeaving() {
+	return this->leaving;
+}
+int Protester::health() {
+	return this->hit_point;
+}
+void Protester::wait(int tick) {
+	this->ticksToWaitBetweenMoves = tick;
+}
+void Protester::beannoyed(int hit) {
+	this->hit_point = std::max(this->hit_point-hit, 0);
+	if (this->hit_point > 0) {
+		world()->playSound(SOUND_PROTESTER_ANNOYED);
+	}
+	else {
+		world()->playSound(SOUND_PROTESTER_GIVE_UP);
+		this->numSquaresToMoveInCurrentDirection = 0;
+		defeat();
+		wait(0);
+	}
+}
 void HardcoreProtester::doSomething() {
 	Protester::doSomething();
 }
+void HardcoreProtester::bebribed() {
+	world()->increaseScore(50);
+	int ticks_to_stare = std::max(50, int(100 - world()->getLevel() * 10));
+	wait(ticks_to_stare);
+}
+void HardcoreProtester::bekilled() {
+	world()->increaseScore(250);
+}
 void Squirt::doSomething() {
 	if (!isAlive()) return;
+
 	Actor* tile = world()->at(this->x(), this->y());
 	if (dynamic_cast<Ice*>(tile) != nullptr) {
 		this->kill();
@@ -426,34 +636,55 @@ void Squirt::doSomething() {
 		this->kill();
 		return;
 	}
+	for (auto p : world()->protesters()) {
+		if (distance_square(this, p) <= 9) {
+			p->beannoyed(2);
+			if (p->health() == 0) {
+				p->bekilled();
+			}
+			else {
+				p->bestunned();
+			}
+			this->kill();
+			return;
+		}
+	}
 
 	if (this->can_travel > 0) {
 		this->can_travel--;
 		switch (this->getDirection())
 		{
 		case right:
-			if (this->x() < VIEW_WIDTH - SPRITE_WIDTH)
+			if (passable(this->x() + 1, this->y()))
 				this->moveTo(this->x() + 1, this->y());
-			else
+			else {
 				this->kill();
+				return;
+			}
 			break;
 		case left:
-			if (this->x() > 0)
+			if (passable(this->x() - 1, this->y()))
 				this->moveTo(this->x() - 1, this->y());
-			else
+			else {
 				this->kill();
+				return;
+			}
 			break;
 		case up:
-			if (this->y() < VIEW_HEIGHT - SPRITE_HEIGHT)
+			if (passable(this->x(), this->y() + 1))
 				this->moveTo(this->x(), this->y() + 1);
-			else
+			else {
 				this->kill();
+				return;
+			}
 			break;
 		case down:
-			if (this->y() > 0)
+			if (passable(this->x(), this->y() - 1))
 				this->moveTo(this->x(), this->y() - 1);
-			else
+			else {
 				this->kill();
+				return;
+			}
 			break;
 		default:
 			break;
@@ -461,6 +692,6 @@ void Squirt::doSomething() {
 	}
 	if (this->can_travel == 0) {
 		this->kill();
+		return;
 	}
 }
-

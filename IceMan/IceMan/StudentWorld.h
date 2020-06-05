@@ -3,6 +3,7 @@
 
 #include "GameWorld.h"
 #include "GameConstants.h"
+#include "GraphObject.h"
 #include <string>
 #include <vector>
 #include <sstream>
@@ -31,8 +32,11 @@ class StudentWorld : public GameWorld
 private:
 	std::list<Actor*> allActors;
 	std::list<Actor*> treasure;
+	std::list<Protester*> allProtesters;
 	Iceman* _player;
 	int G_chance = 0;
+	int maxNumberOfProtester = 0;
+	unsigned int ticksSinceLastProtesterAdded = 0;
 	int number_barrel = 0;
 	std::mt19937 mt{ std::random_device{}() };
 	//Actor* map[VIEW_WIDTH][VIEW_HEIGHT];
@@ -55,7 +59,8 @@ public:
 	/* Interface for Actor classes */
 	Actor* at(int x, int y);
 	Iceman* player();
-	bool dropSquirt(Actor* actor);
+	std::list<Protester*> protesters();
+	bool dropSquirt(Actor* actor, int x, int y);
 	bool dropGold(Actor* actor);
 	bool dropEnemy();
 	bool dropNewItem();

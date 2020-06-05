@@ -43,6 +43,7 @@ public:
 	bool isAlive() { return this->_alive; }
 	int x() { return this->getX(); };
 	int y() { return this->getY(); };
+	bool passable(int x, int y);
 };
 class Ice : public Actor {
 public:
@@ -157,28 +158,43 @@ public:
 	void removeTile(int x, int y);
 	bool passable(int x, int y);
 	void kill();
+	void annoyed(int hit);
 };
 
 class Protester : public Actor {
 private:
 	int ticksToWaitBetweenMoves;
 	int numSquaresToMoveInCurrentDirection;
+	int ticksSinceLastShout;
+	int ticksSinceLastTurn;
+	int hit_point;
 	bool leaving;
 	std::queue<std::pair<int, int>> path;
 	/* */
 public:
 	/* */
-	Protester(StudentWorld* gw, int x, int y, const int IID= IID_PROTESTER) :
-		Actor(gw, IID, true, x, y) {
+	Protester(StudentWorld* gw, int x, int y, const int IID= IID_PROTESTER, int hit_point = 5) :
+		Actor(gw, IID, true, x, y, left, 1.0, 0) {
 		this->ticksToWaitBetweenMoves = maxWait();
 		this->numSquaresToMoveInCurrentDirection = 10;
 		this->leaving = false;
+		this->hit_point = hit_point;
+		this->ticksSinceLastShout = 15;
+		this->ticksSinceLastTurn = 200;
 	}
 	~Protester() {}
 	void doSomething();
-	bool passable(int x, int y);
 	int maxWait();
+	int health();
 	void defeat();
+	void shout();
+	void beannoyed(int hit);
+	bool isLeaving();
+	virtual void bebribed();
+	virtual void bekilled();
+	void bestunned();
+	void wait(int tick);
+	void move(Direction dir, int x, int y);
 };
 class HardcoreProtester : public Protester {
 private:
@@ -186,9 +202,11 @@ private:
 public:
 	/* */
 	HardcoreProtester(StudentWorld* gw, int x, int y) :
-		Protester(gw, x, y, IID_HARD_CORE_PROTESTER) {}
+		Protester(gw, x, y, IID_HARD_CORE_PROTESTER, 20) {}
 	~HardcoreProtester() {}
 	void doSomething();
+	void bebribed();
+	void bekilled();
 };
 class Squirt : public Actor {
 private:
@@ -197,34 +215,11 @@ public:
 	Squirt(StudentWorld* gw, int x, int y, Direction dir) :
 		Actor(gw, IID_WATER_SPURT, false, x, y, dir, 1.0, 1),
 		can_travel(5) {
-		switch (dir) {
-		case right:
-			if (this->x() < VIEW_WIDTH - SPRITE_WIDTH)
-				moveTo(this->x() + SPRITE_WIDTH, this->y());
-			else
-				kill();
-			break;
-		case left:
-			if (this->x() >= SPRITE_WIDTH)
-				moveTo(this->x() - SPRITE_WIDTH, this->y());
-			else
-				kill();
-			break;
-		case up:
-			if (this->y() < VIEW_HEIGHT - SPRITE_HEIGHT)
-				moveTo(this->x(), this->y() + SPRITE_HEIGHT);
-			else
-				kill();
-			break;
-		case down:
-			if (this->y() >= SPRITE_HEIGHT)
-				moveTo(this->x(), this->y() - SPRITE_HEIGHT);
-			else
-				kill();
-			break;
-		}
-		if (_alive)
+
+		if (passable(this->x(), this->y()))
 			setVisible(true);
+		else
+			kill();
 	}
 	~Squirt() {}
 	void doSomething();
