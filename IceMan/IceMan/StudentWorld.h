@@ -130,14 +130,6 @@ public:
 		}
 		return false;
 	}
-	/* Test functions */
-	template<typename T> void killAll() {
-		for (auto actor : allActors) {
-			if (dynamic_cast<T*>(actor) != nullptr) {
-				dynamic_cast<T*>(actor)->defeat();
-			}
-		}
-	}
 	Actor* map[VIEW_WIDTH][VIEW_HEIGHT];
 };
 

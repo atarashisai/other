@@ -164,6 +164,8 @@ public:
 };
 
 class Protester : public Actor {
+protected:
+	std::queue<std::pair<int, int>> path;
 private:
 	int ticksToWaitBetweenMoves;
 	int numSquaresToMoveInCurrentDirection;
@@ -172,7 +174,6 @@ private:
 	int hit_point;
 	bool leaving;
 	bool thinking;
-	std::queue<std::pair<int, int>> path;
 	std::future<std::queue<std::pair<int, int>>> fut;
 	/* */
 public:
@@ -200,18 +201,29 @@ public:
 	void bestunned();
 	void wait(int tick);
 	void move(Direction dir, int x, int y);
+	virtual bool haveAnotherPlanOnMove() { return false; };
+	void findpath(int destination_x, int destination_y);
+
 };
 class HardcoreProtester : public Protester {
 private:
 	/* */
+	int alertDistance;
+	bool makingPlan;
+	int giveupPlan;
 public:
 	/* */
 	HardcoreProtester(StudentWorld* gw, int x, int y) :
-		Protester(gw, x, y, IID_HARD_CORE_PROTESTER, 20) {}
+		Protester(gw, x, y, IID_HARD_CORE_PROTESTER, 20) {
+		this->alertDistance = calcAlertDistance();
+		this->makingPlan = false;
+		this->giveupPlan = 0;
+	}
 	~HardcoreProtester() { kill(); }
-	void doSomething();
 	void bebribed();
 	void bekilled();
+	bool haveAnotherPlanOnMove();
+	int calcAlertDistance();
 };
 class Squirt : public Actor {
 private:

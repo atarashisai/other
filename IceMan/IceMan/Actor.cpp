@@ -232,10 +232,6 @@ void Iceman::doSomething() {
 				});
 			}
 			break;
-		case 'k':
-		case 'K':
-			world()->killAll<Protester>();
-			break;
 		case KEY_PRESS_TAB:
 		case 't':
 		case 'T':
@@ -356,20 +352,17 @@ void Protester::doSomething() {
 	if (this->thinking) {
 		std::future_status status = this->fut.wait_for(std::chrono::seconds(1));
 		if (status == std::future_status::deferred) {
-			std::cout << "deferred\n";
 			return;
 		}
 		else if (status == std::future_status::timeout) {
-			std::cout << "timeout\n";
 			return;
 		}
 		else if (status == std::future_status::ready) {
-			std::cout << "ready\n";
 			this->thinking = false;
 			this->path = this->fut.get();
-		}
-		else {
-			std::cout << "I don't know\n";
+			if (this->path.size() > 0) {
+				this->path.pop(); /* remove the original location */
+			}
 		}
 	}
 	/* leaving */
@@ -468,11 +461,17 @@ void Protester::doSomething() {
 				if (accessible) {
 					setDirection(playersDirection);
 					move(playersDirection, this->getX(), this->getY());
+					std::queue<std::pair<int, int>>().swap(this->path);
 					return;
 				}
 			}
 		}
 	}
+
+	if (this->haveAnotherPlanOnMove()) { /* create a callback handler for childern. */
+		return;
+	}
+
 	/* Random motion */
 	if (this->numSquaresToMoveInCurrentDirection > 0)
 		this->numSquaresToMoveInCurrentDirection--;
@@ -504,7 +503,7 @@ void Protester::doSomething() {
 	}
 	else if (possible_move.size() > 2) {
 		/* make a perpendicular turn */
-		if (ticksSinceLastTurn == 0) {
+		if (this->ticksSinceLastTurn == 0) {
 			this->ticksSinceLastTurn = 200;
 			this->numSquaresToMoveInCurrentDirection = 0;
 			switch (dir) {
@@ -525,6 +524,12 @@ void Protester::doSomething() {
 			std::set<Direction>::iterator it = possible_move.begin();
 			for (int i = world()->rand(0, possible_move.size() - 1); i > 0; i--) {
 				it++;
+			}
+			if ((dir == up || dir == down) && (*(it) != up && *(it) != down)) {
+				this->ticksSinceLastTurn = 200;
+			}
+			if ((dir == right || dir == left) && (*(it) != right && *(it) != left)) {
+				this->ticksSinceLastTurn = 200;
 			}
 			dir = *(it);
 			this->numSquaresToMoveInCurrentDirection = 8 + world()->rand(0, 52);
@@ -589,12 +594,15 @@ bool Actor::passable(int x, int y) {
 	return true;
 }
 void Protester::defeat() {
+	findpath(60, 60);
+	this->leaving = true;
+}
+void Protester::findpath(int destination_x, int destination_y) {
 	fut = std::async(aStarSearch<VIEW_WIDTH, VIEW_HEIGHT, Actor*>, world()->map,
 		make_pair(getX(), getY()),
-		make_pair(60, 60),
+		make_pair(destination_x, destination_y),
 		[this](int x, int y) -> bool { return this->passable(x, y); });
 	this->thinking = true;
-	this->leaving = true;
 }
 void Protester::shout() {
 	if (this->ticksSinceLastShout > 0) {
@@ -636,8 +644,47 @@ void Protester::beannoyed(int hit) {
 		wait(0);
 	}
 }
-void HardcoreProtester::doSomething() {
-	Protester::doSomething();
+bool HardcoreProtester::haveAnotherPlanOnMove() {
+	if (this->makingPlan) {
+		int size = path.size();
+		if (size > 0) {
+			std::pair<int, int> p = path.front();
+			path.pop();
+			/* Adjust facing */
+			Direction dir;
+			if (p.first > getX())
+				dir = right;
+			else if (p.first < getX())
+				dir = left;
+			else if (p.second > getY())
+				dir = up;
+			else
+				dir = down;
+			if (getDirection() != dir)
+				setDirection(dir);
+			/* Advance */
+			moveTo(p.first, p.second);
+			return true;
+		}
+		else {
+			this->makingPlan = false;
+			this->giveupPlan = size - this->alertDistance;
+			return false;
+		}
+	}
+	if (this->giveupPlan > 0) {
+		this->giveupPlan--;
+		return false;
+	}
+	if (distance_square(this, world()->player()) <= 16) {
+		return false;
+	}
+	if (distance_square(this, world()->player()) <= std::pow(this->alertDistance, 2)) {
+		findpath(world()->player()->getX(), world()->player()->getY());
+		this->makingPlan = true;
+		return true;
+	}
+	return false;
 }
 void HardcoreProtester::bebribed() {
 	world()->increaseScore(50);
@@ -646,6 +693,9 @@ void HardcoreProtester::bebribed() {
 }
 void HardcoreProtester::bekilled() {
 	world()->increaseScore(250);
+}
+int HardcoreProtester::calcAlertDistance() {
+	return 16 + world()->getLevel() * 2;
 }
 void Squirt::doSomething() {
 	if (!isAlive()) return;
