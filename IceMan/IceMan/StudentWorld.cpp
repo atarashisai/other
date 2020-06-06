@@ -296,8 +296,7 @@ bool StudentWorld::dropGold(Actor* actor) {
 Drop a new item, a sonar or water pool, based on probability.
 */
 bool StudentWorld::dropNewItem() {
-	//if (rand(0, this->G_chance) < 1) {
-	if (rand(0, 3) < 1) {
+	if (rand(0, this->G_chance) < 1) {
 		if (rand(0, 5) < 1) {
 			/* Add a new Sonar */
 			allActors.push_back(new Sonar(this, 0, VIEW_HEIGHT - SPRITE_HEIGHT));

@@ -506,11 +506,24 @@ void Protester::doSomething() {
 		/* make a perpendicular turn */
 		if (ticksSinceLastTurn == 0) {
 			this->ticksSinceLastTurn = 200;
+			this->numSquaresToMoveInCurrentDirection = 0;
+			switch (dir) {
+			case left:
+			case right:
+				possible_move.erase(right);
+				possible_move.erase(left);
+				break;
+			case up:
+			case down:
+				possible_move.erase(up);
+				possible_move.erase(down);
+				break;
+			}
 		}
-		if (world()->rand(0, 100) > 30 && this->numSquaresToMoveInCurrentDirection == 0) {
+		if (this->numSquaresToMoveInCurrentDirection == 0) {
 			possible_move.erase(dir);
 			std::set<Direction>::iterator it = possible_move.begin();
-			for (int i = world()->rand(0, possible_move.size() - 1);i > 0;i--) {
+			for (int i = world()->rand(0, possible_move.size() - 1); i > 0; i--) {
 				it++;
 			}
 			dir = *(it);
