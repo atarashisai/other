@@ -53,15 +53,17 @@ std::list<Protester*> StudentWorld::protesters() {
 int StudentWorld::init()
 {
 	Actor* tile;
+	list<Actor*> allBoulder;
+	int x, y;
 
 	int current_level_number = getLevel();
 
 	/*clean up map array*/memset(this->map, 0, sizeof(this->map));
 
 	/* Calculate the number of boulders, gold nuggets and barrels of oil */
-	int B = std::min(current_level_number / 2 + 2, 9);
-	int G = std::max(5 - current_level_number / 2, 2);
-	int L = std::min(2 + current_level_number, 21);
+	int B = std::min(current_level_number / 2 + 2, 9); //Boulder max = 9
+	int G = std::max(5 - current_level_number / 2, 2); //Gold    min = 2
+	int L = std::min(2 + current_level_number, 21);    //Barrel  max = 21
 	int T = max(25, 200 - current_level_number);
 	int P = min(15, 2 + (int)(current_level_number * 1.5));
 	this->maxNumberOfProtester = P;
@@ -69,9 +71,10 @@ int StudentWorld::init()
 
 	/* There is a 1 in G chance that a new Water Pool or Sonar Kit Goodie will be added */
 	this->G_chance = current_level_number * 25 + 300;
+
 	/* Ice */
-	for (int x = 0; x < 64; x++) {
-		for (int y = 0; y < 60; y++) {
+	for (x = 0; x < 64; x++) {
+		for (y = 0; y < 60; y++) {
 			if ((x >= 30 && x <= 33 && y >= 4)) {
 				continue;
 			}
@@ -83,11 +86,26 @@ int StudentWorld::init()
 	}
 
 	/* Boulder */
-	for (int n = 0; n < B; n++) {
-		int x = rand(0, VIEW_HEIGHT - SPRITE_HEIGHT);
-		int y = rand(20, 56);
+	int allowance = B;
+	for (int n = 0; n < B*3; n++) {
+		x = rand(0, VIEW_WIDTH - SPRITE_WIDTH * 2 - 4);
+		y = rand(20, 56);
+		if (x > VIEW_WIDTH / 2 - SPRITE_WIDTH * 3 / 2) {
+			x += SPRITE_WIDTH * 2;
+		}
 		tile = new Boulder(this, x, y);
+		bool valid = true;
+		for (auto each : allBoulder) {
+			if (distance_square(each, tile) <= 36) {
+				delete tile;
+				valid = false;
+				break;
+			}
+		}
+		if (!valid)
+			continue;
 		allActors.push_back(tile);
+		allBoulder.push_back(tile);
 
 		/* A boulder should occupy the 4x4 space */
 		for (int dx = 0; dx < SPRITE_WIDTH; dx++) {
@@ -106,23 +124,22 @@ int StudentWorld::init()
 				map[x + dy][y + dx] = tile;
 			}
 		}
-		/* Special points */
-		//map[x][y + 2] = tile;
-		//map[x + 2][y] = tile;
-
+		allowance--;
+		if (allowance == 0)
+			break;
 	}
 	/* Gold */
-	for (int n = 0; n < G; n++) {
-		tile = new Gold(this, rand(0, VIEW_HEIGHT - SPRITE_HEIGHT), rand(20, 56));
-		treasure.push_back(tile);
-		allActors.push_back(tile);
-	}
-	/* Barrel */
+	std::thread th1(&StudentWorld::dropTreasure<Gold>, this, allBoulder, G);
+	std::thread th2(&StudentWorld::dropTreasure<Barrel>, this, allBoulder, L);
+
+	th1.join();
+	th2.join();
+	/* Barrel 
 	for (int n = 0; n < L; n++) {
 		tile = new Barrel(this, rand(0, VIEW_HEIGHT - SPRITE_HEIGHT), rand(20, 56));
 		treasure.push_back(tile);
 		allActors.push_back(tile);
-	}
+	}*/
 	/* Water */
 
 	/* Iceman */
@@ -279,32 +296,40 @@ bool StudentWorld::dropGold(Actor* actor) {
 Drop a new item, a sonar or water pool, based on probability.
 */
 bool StudentWorld::dropNewItem() {
-	if (rand(0, this->G_chance) < 1) {
+	//if (rand(0, this->G_chance) < 1) {
+	if (rand(0, 3) < 1) {
 		if (rand(0, 5) < 1) {
 			/* Add a new Sonar */
 			allActors.push_back(new Sonar(this, 0, VIEW_HEIGHT - SPRITE_HEIGHT));
+			return true;
 		}
 		else {
+			/* Add a water pool */
 			int x = rand(0, 60);
 			int y = rand(0, 60);
 			bool spotIsFound = false;
-			while (!spotIsFound) {
-				for (int r = 1; r < std::max(VIEW_HEIGHT, VIEW_WIDTH); r++) {
-					for (int dx = -r; dx <= r; dx++) {
-						for (int dy = -r; dy <= r; dy++) {
-							if (outsideMap(x + dx + 3, y + dy + 3))
+			for (int r = 0; r < std::max(VIEW_HEIGHT, VIEW_WIDTH); r++) {
+				for (int dx = -r; dx != r; dx = r) { /* -r or r*/
+					for (int dy = -r; dy <= r; dy++) {
+						int rx = x + dx;
+						int ry = y + dy;
+						for (bool f = false; f != true; f = true) {
+							int temp = rx;
+							rx = ry;
+							ry = temp;
+							if (outsideMap(rx + 3, ry + 3))
 								continue;
-							if (!(map[x + dx + 3][x + dx + 3] == nullptr))
+							if (!(map[rx + 3][ry + 3] == nullptr))
 								continue;
 							else {
 								spotIsFound = true;
-								for (int _x = x + dx; _x < x + dx + 4; _x++) {
-									for (int _y = y + dy; _y < y + dy + 4; _y++) {
-										spotIsFound &= ((!outsideMap(_x, _y)) && (map[_x][_y] == nullptr));
+								for (int tx = rx; tx < rx + 4; tx++) {
+									for (int ty = ry; ty < ry + 4; ty++) {
+										spotIsFound &= ((!outsideMap(tx, ty)) && (map[tx][ty] == nullptr));
 									}
 								}
 								if (spotIsFound) {
-									allActors.push_back(new Water(this, x + dx, y + dy));
+									allActors.push_back(new Water(this, rx, ry));
 									return true;
 								}
 
@@ -313,10 +338,7 @@ bool StudentWorld::dropNewItem() {
 					}
 				}
 			}
-			/* Add a water pool */
-			
 		}
-		return true;
 	}
 	return false;
 }

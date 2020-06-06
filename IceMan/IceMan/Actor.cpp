@@ -7,10 +7,6 @@
 using namespace std;
 // Students:  Add code to this file (if you wish), Actor.h, StudentWorld.h, and StudentWorld.cpp
 
-inline double distance_square(Actor* o, Actor* t) {
-	return std::pow(o->x() - t->x(), 2) + std::pow(o->y() - t->y(), 2);
-}
-
 void Gold::doSomething() {
 	if (!isAlive()) return;
 	if (isPermanent) {
@@ -228,10 +224,10 @@ void Iceman::doSomething() {
 		case 'z':
 		case 'Z':
 			if (this->sonar() > 0) {
-				//this->number_sonar -= 1;
+				this->number_sonar -= 1;
 				world()->allTreasure([this](Actor* item) {
 					if (distance_square(this, item) <= 144) {
-						item->setVisible(false);
+						item->setVisible(true);
 					}
 				});
 			}
@@ -244,7 +240,7 @@ void Iceman::doSomething() {
 		case 't':
 		case 'T':
 			if (this->gold() > 0) {
-				//this->number_gold -= 1;
+				this->number_gold -= 1;
 				world()->dropGold(this);
 			}
 			break;
@@ -254,6 +250,7 @@ void Iceman::doSomething() {
 		case KEY_PRESS_SPACE:
 			/*... add a Squirt in front of the player...; */
 			if (this->squirt() > 0) {
+				this->number_squirt--;
 				switch (getDirection())
 				{
 				case left:
@@ -272,7 +269,6 @@ void Iceman::doSomething() {
 					break;
 				}
 				world()->playSound(SOUND_PLAYER_SQUIRT);
-				//this->number_squirt--;
 			}
 			break;
 			// etc…
@@ -352,14 +348,29 @@ void Protester::doSomething() {
 	}
 
 	this->ticksToWaitBetweenMoves = std::max(unsigned int(0), 3 - this->_gw->getLevel() / 4);
-
-	if (this->hit_point == 0 && !this->leaving) {
-		this->defeat();
-		return;
-	}
+	
 	if (this->leaving && getX() == 60 && getY() == 60) {
 		kill();
 		return;
+	}
+	if (this->thinking) {
+		std::future_status status = this->fut.wait_for(std::chrono::seconds(1));
+		if (status == std::future_status::deferred) {
+			std::cout << "deferred\n";
+			return;
+		}
+		else if (status == std::future_status::timeout) {
+			std::cout << "timeout\n";
+			return;
+		}
+		else if (status == std::future_status::ready) {
+			std::cout << "ready\n";
+			this->thinking = false;
+			this->path = this->fut.get();
+		}
+		else {
+			std::cout << "I don't know\n";
+		}
 	}
 	/* leaving */
 	if (this->leaving) {
@@ -565,12 +576,11 @@ bool Actor::passable(int x, int y) {
 	return true;
 }
 void Protester::defeat() {
-	this->path = aStarSearch<VIEW_WIDTH, VIEW_HEIGHT>(
-		world()->map, 
-		make_pair(getX(), getY()), 
+	fut = std::async(aStarSearch<VIEW_WIDTH, VIEW_HEIGHT, Actor*>, world()->map,
+		make_pair(getX(), getY()),
 		make_pair(60, 60),
-		[this](int x, int y) -> bool { return this->passable(x, y); }
-	);
+		[this](int x, int y) -> bool { return this->passable(x, y); });
+	this->thinking = true;
 	this->leaving = true;
 }
 void Protester::shout() {

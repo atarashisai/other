@@ -12,6 +12,8 @@
 #include <random>
 #include <memory>
 #include <list>
+#include <mutex>
+#include <thread>
 #include <functional>
 
 // Students:  Add code to this file, StudentWorld.cpp, Actor.h, and Actor.cpp
@@ -50,6 +52,7 @@ private:
 	std::string format();
 	void updateDisplayText();
 	bool outsideMap(int x, int y);
+	std::mutex mtx;
 public:
 	/* Override virtual methods */
 	StudentWorld(std::string assetDir);
@@ -65,6 +68,46 @@ public:
 	bool dropEnemy();
 	bool dropNewItem();
 	bool dropBoulder(Boulder* boulder);
+	template<typename T> 
+	void dropTreasure(std::list<Actor*> allBoulder, int max) {
+		int allowance = max;
+		for (int n = 0; n < max * 3; n++) {
+			bool valid = true;
+			int x = this->rand(0, VIEW_WIDTH - SPRITE_WIDTH * 2 - 4);
+			int y = this->rand(0, 56);
+			if (x > VIEW_WIDTH / 2 - SPRITE_WIDTH * 3 / 2) {
+				x += SPRITE_WIDTH * 2;
+			}
+			Actor* tile = new T(this, x, y);
+			for (auto each : allBoulder) {
+				valid &= (distance_square(each, tile) > 36);
+				if (!valid) {
+					delete tile;
+					break;
+				}
+			}
+			if (!valid)
+				continue;
+
+			for (auto each : treasure) {
+				valid &= (distance_square(each, tile) > 36);
+				if (!valid) {
+					delete tile;
+					break;
+				}
+			}
+			if (!valid)
+				continue;
+
+			mtx.lock();
+			this->treasure.push_back(tile);
+			this->allActors.push_back(tile);
+			mtx.unlock();
+			allowance--;
+			if (allowance == 0)
+				break;
+		}
+	}
 	void allTreasure(std::function<void(Actor*)> callback);
 	int rand(int min, int max) {
 		return std::uniform_int_distribution<int>{min, max}(mt);

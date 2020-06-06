@@ -10,6 +10,8 @@
 #include <vector>
 #include <queue>
 #include <functional>
+#include <future>
+#include <chrono>
 class StudentWorld;
 // Students:  Add code to this file, Actor.cpp, StudentWorld.h, and StudentWorld.cpp
 class Actor : public GraphObject {
@@ -50,7 +52,7 @@ public:
 	Ice(StudentWorld* gw, int x, int y):
 		Actor(gw, IID_ICE, true, x, y, right, 0.25, 3) {};
 	void doSomething() {};
-	~Ice() { }
+	~Ice() { kill(); }
 };
 class Boulder : public Actor {
 private:
@@ -68,7 +70,7 @@ public:
 		countdown(rhs.countdown) {
 	}
 	virtual void doSomething();
-	~Boulder() { }
+	~Boulder() { kill(); }
 };
 class Goody : public Actor {
 protected:
@@ -76,7 +78,7 @@ protected:
 public:
 	using Actor::Actor;
 	void doSomething() {}
-	virtual ~Goody() {}
+	virtual ~Goody() { kill(); }
 };
 class Supply : public Actor {
 protected:
@@ -84,7 +86,7 @@ protected:
 public:
 	using Actor::Actor;
 	void doSomething();
-	virtual ~Supply() {}
+	virtual ~Supply() { kill(); }
 	virtual void receiveSupply() {};
 	int maxCount();
 };
@@ -97,7 +99,7 @@ public:
 		this->countdown = maxCount();
 	}
 	void receiveSupply();
-	~Sonar() {}
+	~Sonar() { kill(); }
 };
 
 class Water : public Supply {
@@ -108,16 +110,16 @@ public:
 		this->countdown = maxCount();
 	}
 	void receiveSupply();
-	~Water() {}
+	~Water() { kill(); }
 };
 
 class Gold : public Goody {
 	bool isPermanent = true;
 public:
 	Gold(StudentWorld* gw, int x, int y) :
-		Goody(gw, IID_GOLD, true, x, y) {}
+		Goody(gw, IID_GOLD, false, x, y) {}
 	void doSomething();
-	~Gold() {}
+	~Gold() { kill(); }
 	void setLost();
 	int maxCount() { return 100; }
 };
@@ -125,9 +127,9 @@ public:
 class Barrel : public Goody {
 public:
 	Barrel(StudentWorld* gw, int x, int y):
-		Goody(gw, IID_BARREL, true, x, y) {}
+		Goody(gw, IID_BARREL, false, x, y) {}
 	void doSomething();
-	~Barrel() {}
+	~Barrel() { kill(); }
 };
 class Iceman : public Actor {
 private:
@@ -145,7 +147,7 @@ public:
 		number_gold(0),
 		hit_point(10) {}
 	virtual void doSomething();
-	~Iceman() {}
+	~Iceman() { kill(); }
 	int gold();
 	int sonar();
 	int squirt();
@@ -169,7 +171,9 @@ private:
 	int ticksSinceLastTurn;
 	int hit_point;
 	bool leaving;
+	bool thinking;
 	std::queue<std::pair<int, int>> path;
+	std::future<std::queue<std::pair<int, int>>> fut;
 	/* */
 public:
 	/* */
@@ -178,11 +182,12 @@ public:
 		this->ticksToWaitBetweenMoves = maxWait();
 		this->numSquaresToMoveInCurrentDirection = 10;
 		this->leaving = false;
+		this->thinking = false;
 		this->hit_point = hit_point;
 		this->ticksSinceLastShout = 15;
 		this->ticksSinceLastTurn = 200;
 	}
-	~Protester() {}
+	~Protester() { kill(); }
 	void doSomething();
 	int maxWait();
 	int health();
@@ -203,7 +208,7 @@ public:
 	/* */
 	HardcoreProtester(StudentWorld* gw, int x, int y) :
 		Protester(gw, x, y, IID_HARD_CORE_PROTESTER, 20) {}
-	~HardcoreProtester() {}
+	~HardcoreProtester() { kill(); }
 	void doSomething();
 	void bebribed();
 	void bekilled();
@@ -399,5 +404,8 @@ std::queue<std::pair<int, int>> aStarSearch(
 	std::function<bool(int, int)> callback) {
 	auto a = AStar<ROW, COL, T>();
 	return a.search(src, dest, grid, callback);
+}
+inline double distance_square(Actor* o, Actor* t) {
+	return std::pow(o->x() - t->x(), 2) + std::pow(o->y() - t->y(), 2);
 }
 #endif // ACTOR_H_
